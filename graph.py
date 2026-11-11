@@ -20,14 +20,20 @@ from typing import Annotated, Any, TypedDict
 
 from langchain_core.messages import AnyMessage
 from langgraph.graph import END, START, StateGraph
+from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph.message import add_messages
+from langgraph.types import interrupt
+from pydantic import ValidationError
 
 from kb import rag, store
 from agent import run_tools
 from draft import build_request
+from guards import check_message
 from memory import turn_messages
 from models import build_model, load_prompt
-from schemas import Citation, Intent
+from schemas import Citation, Decision, Intent
+from tools import NotApproved
+from tools import register_team as save_registration
 
 
 class State(TypedDict, total=False):
@@ -44,17 +50,26 @@ class State(TypedDict, total=False):
     request: dict              # a drafted registration or exception request
     decision: dict             # the organizer's decision {"status": "approved" | "rejected", "note": ...}
     reply: str                 # the final text shown to the student
+    blocked: dict              # set by intake when a guardrail refuses the message: {"kind", "message"}
+    notes: list                # things the student should be told ("I hid a private number")
+    turns: int                 # messages so far in this chat (the cost fuse)
 
 
 # ---- nodes ---------------------------------------------------------------------------------
 
 def intake(state: State) -> dict:
-    """Guardrails: PII hiding, prompt-injection and off-topic filter, step limit. (guards: M5)
+    """C5 guardrails (guards.py, plain code): hide private numbers, block injection, abuse, requests for
+    another student's details, over-long messages and chats past the limit.
 
     It also RESETS the per-turn fields. The checkpointer keeps the whole state between turns, so without
     this a decision or tool log from the last message would still be sitting there for this one."""
-    return {"standalone": state["question"], "documents": [], "answer": "", "citations": [], "version_note": "",
-            "tool_log": [], "request": None, "decision": None, "reply": "", "intent": {}}
+    turns = state.get("turns", 0)
+    result = check_message(state["question"], state["student_id"], turns)
+    reset = {"documents": [], "answer": "", "citations": [], "version_note": "", "tool_log": [], "request": None,
+             "decision": None, "reply": "", "intent": {}, "turns": turns + 1}
+    if result.blocked:
+        return reset | {"standalone": "", "blocked": result.blocked, "notes": []}
+    return reset | {"standalone": result.text, "blocked": None, "notes": result.notes}
 
 
 def rewrite(state: State) -> dict:
@@ -129,13 +144,33 @@ def draft_request(state: State) -> dict:
 
 
 def approval_gate(state: State) -> dict:
-    """E1: interrupt() here until an organizer approves or rejects. (stub: M5, so it rejects: nothing is written)"""
-    return {"decision": {"status": "rejected", "note": "approval is built in milestone M5"}}
+    """E1: pause the whole run until an organizer decides. interrupt() saves the state to the checkpoint file
+    and stops; Command(resume=...) from the organizer terminal (approvals.py) continues from this line.
+
+    RULE: on resume this node runs again from its first line, so nothing before interrupt() may have a side
+    effect. Writing to registrations.db happens in the NEXT node, after the decision is saved."""
+    payload = {"kind": "approval", "student_id": state["student_id"], "request": state["request"]}
+    while True:
+        answer = interrupt(payload)
+        try:
+            return {"decision": Decision.model_validate(answer).model_dump()}
+        except ValidationError:      # an invalid answer (e.g. a rejection with no reason): ask again
+            payload = payload | {"error": "a decision needs status approved or rejected, and a rejection needs a reason"}
 
 
 def register_team(state: State) -> dict:
-    """The ONLY node that writes registrations.db, reached only after approval. (stub: M5)"""
-    return {"answer": "(register_team: milestone M5)"}
+    """The ONLY node that writes registrations.db, reached only through an approved decision.
+    tools.register_team checks the approval again and is safe to run twice."""
+    req, decision = state["request"], state["decision"]
+    try:
+        result = save_registration(req["event"], req["leader_id"], req["member_ids"], req["exception_reason"], decision)
+    except (ValueError, NotApproved) as err:
+        return {"answer": f"An organizer approved your request, but I could not save the registration ({err}). "
+                          "Please contact the organizers."}
+    note = f" Organizer's note: {decision['note']}" if decision["note"] else ""
+    again = " (it was already registered)" if result["already_registered"] else ""
+    return {"answer": f"Approved! Your team for {req['event_name']} is registered{again}. "
+                      f"Reference: {result['ref']} (mock data, not an official registration).{note}"}
 
 
 def out_of_scope(state: State) -> dict:
@@ -148,21 +183,30 @@ def out_of_scope(state: State) -> dict:
 
 def compose_reply(state: State) -> dict:
     """Build the final text, and add this turn to the chat history. The checkpointer saves it (C4)."""
-    decision = state.get("decision")
-    if state.get("request") is None and state["intent"].get("intent") == "register":      # could not even draft it
+    decision, blocked = state.get("decision"), state.get("blocked")
+    stored_question = state["standalone"]                       # the version with private numbers hidden
+    if blocked:
+        text = blocked["message"]
+        stored_question = f"[message blocked: {blocked['kind']}]"     # an attack must not sit in the history
+    elif state.get("request") is None and state["intent"].get("intent") == "register":      # could not even draft it
         text = state["answer"]
     elif decision and decision["status"] == "rejected":
-        text = f"Your request was not approved. Reason: {decision['note']}"
+        text = f"Your {state['request']['kind']} request was not approved by the organizer. Reason: {decision['note']}"
     else:
         lines = [state.get("answer", "")]
         if state.get("version_note"):
             lines.append(f"(Version note: {state['version_note']})")
         lines += [f"  [cite] {Citation(**c).label()}" for c in state.get("citations") or []]
         text = "\n".join(lines)
-    return {"reply": text, "messages": turn_messages(state.get("messages", []), state["question"], text)}
+    text = "\n".join([*(f"({n})" for n in state.get("notes") or []), text])
+    return {"reply": text, "messages": turn_messages(state.get("messages", []), stored_question, text)}
 
 
 # ---- routes: functions that return the NAME of the next node --------------------------------
+
+def after_intake(state: State) -> str:
+    return "compose_reply" if state.get("blocked") else "rewrite"
+
 
 def after_classify(state: State) -> str:
     if state["intent"]["asks_about_other_person"]:               # never reaches a tool: nothing to leak
@@ -188,7 +232,7 @@ def build_graph(checkpointer=None):
                approval_gate, register_team, out_of_scope, compose_reply):
         g.add_node(fn.__name__, fn)
     g.add_edge(START, "intake")
-    g.add_edge("intake", "rewrite")
+    g.add_conditional_edges("intake", after_intake, ["rewrite", "compose_reply"])
     g.add_edge("rewrite", "classify")
     g.add_conditional_edges("classify", after_classify, ["retrieve", "tool_agent", "out_of_scope"])
     g.add_edge("retrieve", "answer")
@@ -209,6 +253,14 @@ def run(graph, question: str, student_id: str = "C233001", show=print, thread_id
     config = {"configurable": {"thread_id": thread_id}} if thread_id else None
     for update in graph.stream(state, config, stream_mode="updates"):
         for node, changes in update.items():
+            if node == "__interrupt__":                   # the graph paused at the approval gate
+                req = state["request"]
+                state["interrupted"] = True
+                state["reply"] = (f"I checked your request and sent it to a fest organizer for approval "
+                                  f"({req['kind']}: {req['event_name']}, team of {1 + len(req['member_ids'])}). "
+                                  "Nothing is saved until they decide. You will see the result here.")
+                show("  -> approval_gate  (paused: waiting for an organizer)")
+                continue
             changes = changes or {}          # a node that changed nothing reports None
             state |= changes
             extra = f"  {json.dumps(changes['intent'])}" if node == "classify" else ""
@@ -233,10 +285,10 @@ SAMPLES = [   # (message, asking student)
 ]
 
 if __name__ == "__main__":
-    graph = build_graph()
+    graph = build_graph(InMemorySaver())             # interrupt() needs a checkpointer; samples need no file
     print(graph.get_graph().draw_mermaid() if "--mermaid" in sys.argv else "")
     cli = [(" ".join(sys.argv[1:]), "C233001")] if len(sys.argv) > 1 and not sys.argv[1].startswith("--") else SAMPLES
     for q, student in cli:
         print(f"\nQ ({student}): {q}")
-        print(run(graph, q, student)["reply"])
+        print(run(graph, q, student, thread_id=f"sample-{student}-{abs(hash(q))}")["reply"])
     store.close()

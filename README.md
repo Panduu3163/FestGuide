@@ -34,3 +34,9 @@ CSE Fest 2026 PDFs, used with permission.
 
     uv run python chat.py --student C233001            # chat; closing and reopening continues it
     uv run python tests/check_memory.py                # memory checks, no model needed
+- M5 guardrails (C5) and human approval (E1): guards.py, approvals.py, organizer.py
+
+    uv run python chat.py --student C233001             # terminal 1: the student
+    uv run python organizer.py --watch                  # terminal 2: the organizer (approve with a note, reject with a reason)
+    uv run python tests/check_guards.py                 # attacks blocked, normal questions pass
+    uv run python tests/check_approval.py               # pause, restart, approve, reject (no model)

@@ -24,7 +24,7 @@ from schemas import Citation, RagAnswer  # noqa: E402
 NOT_SAID = "The rulebook does not say."
 
 
-def search(question: str, k: int | None = None, event: str | None = None) -> list[Document]:
+def search(question: str, k: int | None = None, event: str | None = None, version: str | None = None) -> list[Document]:
     """The best k SECTIONS for a question, each with its versions.
 
     The 2026 text and its mock v1 twin score almost the same, so taking the top k chunks would
@@ -32,7 +32,8 @@ def search(question: str, k: int | None = None, event: str | None = None) -> lis
     (event, section, page), keep the best k groups, and give the model every version in them.
     That is how it can notice that v1 said something different."""
     k = k or settings.RAG_K
-    flt = store.where(event=event) if event else None
+    fields = {name: value for name, value in (("event", event), ("version", version)) if value}
+    flt = store.where(**fields) if fields else None      # `version="2026"`: only the current rulebook text
     hits = store.vector_store("dense").similarity_search(question, k=k * 3, filter=flt)
     groups: dict[tuple, list[Document]] = {}
     for d in hits:                                   # hits are best-first, so groups keep that order

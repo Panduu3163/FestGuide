@@ -15,10 +15,12 @@ from config import settings  # noqa: E402
 settings.STATE_DIR = Path(tempfile.mkdtemp())          # before anything opens the database
 import fest_data  # noqa: E402
 from graph import build_graph, run  # noqa: E402
+from langgraph.checkpoint.memory import InMemorySaver  # noqa: E402
 from kb import store  # noqa: E402
 
 fest_data.seed_db(reset=True)
-graph, failures = build_graph(), []
+graph, failures = build_graph(InMemorySaver()), []     # the approval gate needs a checkpointer
+counter = iter(range(1000))
 
 
 def check(name, cond, detail=""):
@@ -29,7 +31,7 @@ def check(name, cond, detail=""):
 
 
 def ask(message, student="C233001"):
-    return run(graph, message, student, show=lambda *_: None)
+    return run(graph, message, student, show=lambda *_: None, thread_id=f"t{next(counter)}")
 
 
 def called(state, tool):
@@ -55,6 +57,7 @@ req = s.get("request") or {}
 check("a BBA member turns the request into an exception request",
       req.get("kind") == "exception" and any("BBA" in p for p in req.get("problems", [])), req)
 check("the request has the 3 team members and a cited rule", len(req.get("member_ids", [])) == 2 and req.get("cited_rules"), req)
+check("the request paused for an organizer", s.get("interrupted") is True, s.get("reply"))
 check("nothing was written to registrations.db", not fest_data.db().execute("SELECT 1 FROM teams WHERE ref='REG-0004'").fetchall())
 
 s = ask("Register me alone for the debate.")

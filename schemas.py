@@ -7,7 +7,7 @@
 from datetime import date
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 # The seven events, by the same keys as data/events.yml.
 EventKey = Literal["solo_programming", "videography", "debate", "tech_olympiad",
@@ -64,3 +64,15 @@ class EventRules(BaseModel):
     eligible_level: Literal["any", "undergraduate"] | None = Field(default=None, description="'undergraduate' only if the rulebook limits it to undergraduates.")
     one_team_only: bool | None = Field(default=None, description="True if a student may join only one team or entry.")
     evidence: list[str] = Field(default_factory=list, description="Short VERBATIM quotes from the rulebook that support the values above.")
+
+
+class Decision(BaseModel):
+    """An organizer's answer to a pending request. Rejecting needs a reason; approving may carry a note."""
+    status: Literal["approved", "rejected"]
+    note: str = ""
+
+    @model_validator(mode="after")
+    def rejection_needs_reason(self):
+        if self.status == "rejected" and not self.note.strip():
+            raise ValueError("a rejection needs a reason")
+        return self

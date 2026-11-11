@@ -38,7 +38,7 @@ def build_request(student_id: str, question: str, events: list[str], wants_excep
     problems = [f"{c['name']} ({c['student_id']}, {c['department']}): {p}" for c in checks for p in c["problems"]]
     # The organizer must always see the cited rule, so the code searches for it itself instead of
     # hoping the model called search_rules.
-    rules = search_rules_impl(f"who may join and how many members: {ev['name']} eligibility and team size", event)[:2]
+    rules = search_rules_impl("who may join: open to which students, eligibility, team size and members", event)[:2]
     kind = "exception" if problems or wants_exception else "registration"
     return {
         "kind": kind, "event": event, "event_name": ev["name"],

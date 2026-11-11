@@ -16,6 +16,7 @@ only the register_team graph node calls it, after approval.
 Every result says when a fact comes from MOCK data, and null in events.yml means "the rulebook does not say".
 """
 import json
+import re
 import sqlite3
 from datetime import date
 
@@ -55,11 +56,30 @@ def _minutes(hhmm: str) -> int:
 
 # ---- the tools' logic (plain functions, easy to test) ---------------------------------------------
 
+def best_lines(text: str, question: str, limit: int = 420) -> str:
+    """The lines of a chunk that best match the question, in their original order (not just its first 420 characters:
+    in a long intro paragraph the eligibility line comes last)."""
+    words = {w for w in re.findall(r"[a-z]{4,}", question.lower())} | {"open", "eligible", "students", "team", "members", "allowed"}
+    lines = [ln.strip() for ln in text.splitlines()[1:] if ln.strip()]            # line 1 is the "event - section" header
+    # overlap with the question, divided by a length penalty: a short bullet that says exactly the thing beats a long intro paragraph
+    score = lambda i: len(words & set(re.findall(r"[a-z]{4,}", lines[i].lower()))) / (1 + len(lines[i]) / 150)  # noqa: E731
+    ranked = sorted(range(len(lines)), key=lambda i: -score(i))
+    chosen, size = [], 0
+    for i in ranked:
+        if size + len(lines[i]) > limit and chosen:
+            break
+        chosen.append(i)
+        size += len(lines[i])
+    return " ".join(lines[i] for i in sorted(chosen))[:limit + 80]
+
+
 def search_rules_impl(question: str, event: str | None = None) -> list[dict]:
+    """Rulebook passages for the model and for the organizer. Only the CURRENT (2026) text: an older mock
+    version must never be quoted as the rule a decision rests on."""
     from kb.rag import search          # imported here: tools.py must load without opening Qdrant
     return [{"source": f"{d.metadata['event_name']}, {d.metadata['section']}, p.{d.metadata['page']} [{d.metadata['version']}]",
              "source_type": d.metadata["source_type"],
-             "text": " ".join(d.page_content.split())[:420]} for d in search(question, k=3, event=event)]
+             "text": best_lines(d.page_content, question)} for d in search(question, k=3, event=event, version="2026")]
 
 
 def check_eligibility_impl(student: str, event: str) -> dict:

@@ -38,6 +38,8 @@ class Settings(BaseSettings):
     #     a date inside the fest window (proposal, risk table). Registration for the debate is 2-10 June. ---
     TODAY: date = date(2026, 6, 5)
     MAX_TOOL_STEPS: int = 6                  # the fuse: the tool loop stops after this many model calls
+    MAX_QUESTION_CHARS: int = 600            # longer messages are refused (cost and injection limit)
+    MAX_TURNS_PER_THREAD: int = 40           # a chat stops after this many messages (cost fuse)
 
     # --- RAG (course sessions 8-9) ---
     CHUNK_SIZE: int = 800
