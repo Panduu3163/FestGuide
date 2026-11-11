@@ -55,7 +55,7 @@ def rewrite(state: State) -> dict:
 def classify(state: State) -> dict:
     """C1: the model returns an Intent object (Pydantic). Its `intent` field picks the route."""
     template, version = load_prompt("classify_prompt")
-    prompt = template.format(question=state["standalone"], student_id=state.get("student_id") or "unknown")
+    prompt = template.format(question=state["standalone"])
     intent: Intent = _classifier().invoke(prompt, config={"run_name": "classify", "tags": [f"prompt:classify_prompt:{version}"]})
     return {"intent": intent.model_dump()}
 
