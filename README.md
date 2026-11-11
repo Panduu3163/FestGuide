@@ -30,3 +30,7 @@ CSE Fest 2026 PDFs, used with permission.
     uv run python tests/check_tools.py      # tool logic, no model, free
     uv run python tests/check_agent.py      # real messages through the graph (about 20 model calls)
     uv run python graph.py                  # seven sample messages with tool calls shown
+- M4 conversation memory (C4): memory.py, chat.py (student terminal)
+
+    uv run python chat.py --student C233001            # chat; closing and reopening continues it
+    uv run python tests/check_memory.py                # memory checks, no model needed

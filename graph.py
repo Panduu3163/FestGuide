@@ -16,25 +16,29 @@ place in the graph now and get real code in the milestone named next to them.
 """
 import json
 import sys
-from typing import Any, TypedDict
+from typing import Annotated, Any, TypedDict
 
+from langchain_core.messages import AnyMessage
 from langgraph.graph import END, START, StateGraph
+from langgraph.graph.message import add_messages
 
 from kb import rag, store
 from agent import run_tools
 from draft import build_request
+from memory import turn_messages
 from models import build_model, load_prompt
-from schemas import Intent
+from schemas import Citation, Intent
 
 
 class State(TypedDict, total=False):
+    messages: Annotated[list[AnyMessage], add_messages]   # the chat history (C4); saved by the checkpointer
     student_id: str            # who is chatting (set by the chat program, not by the model)
     question: str              # what the student typed
     standalone: str            # the question after rewriting (E2)
     intent: dict               # the classifier's Intent, as a dict
     documents: list            # retrieved chunks (rules route)
     answer: str                # answer text (rules route)
-    citations: list            # Citation objects
+    citations: list            # citations as plain dicts (see schemas.Citation)
     version_note: str
     tool_log: list             # every tool call and result of the tool loop (plan / register routes)
     request: dict              # a drafted registration or exception request
@@ -45,8 +49,12 @@ class State(TypedDict, total=False):
 # ---- nodes ---------------------------------------------------------------------------------
 
 def intake(state: State) -> dict:
-    """Guardrails: PII hiding, prompt-injection and off-topic filter, step limit. (stub: M5)"""
-    return {"standalone": state["question"]}
+    """Guardrails: PII hiding, prompt-injection and off-topic filter, step limit. (guards: M5)
+
+    It also RESETS the per-turn fields. The checkpointer keeps the whole state between turns, so without
+    this a decision or tool log from the last message would still be sitting there for this one."""
+    return {"standalone": state["question"], "documents": [], "answer": "", "citations": [], "version_note": "",
+            "tool_log": [], "request": None, "decision": None, "reply": "", "intent": {}}
 
 
 def rewrite(state: State) -> dict:
@@ -79,7 +87,8 @@ def retrieve(state: State) -> dict:
 def answer(state: State) -> dict:
     """C6: a cited answer, or "the rulebook does not say"."""
     out = rag.generate({"question": state["standalone"], "documents": state["documents"]})
-    return {"answer": out["answer"], "citations": out["citations"], "version_note": out["version_note"]}
+    # Plain dicts, not Citation objects: the checkpointer saves state to disk and should only hold plain data.
+    return {"answer": out["answer"], "citations": [c.model_dump() for c in out["citations"]], "version_note": out["version_note"]}
 
 
 def tool_agent(state: State) -> dict:
@@ -138,17 +147,19 @@ def out_of_scope(state: State) -> dict:
 
 
 def compose_reply(state: State) -> dict:
-    """Build the final text. Memory (C4) is saved by the checkpointer around the whole run. (M4)"""
+    """Build the final text, and add this turn to the chat history. The checkpointer saves it (C4)."""
     decision = state.get("decision")
-    if state.get("request") is None and state["intent"]["intent"] == "register":      # could not even draft it
-        return {"reply": state["answer"]}
-    if decision and decision["status"] == "rejected":
-        return {"reply": f"Your request was not approved. Reason: {decision['note']}"}
-    lines = [state.get("answer", "")]
-    if state.get("version_note"):
-        lines.append(f"(Version note: {state['version_note']})")
-    lines += [f"  [cite] {c.label()}" for c in state.get("citations") or []]
-    return {"reply": "\n".join(lines)}
+    if state.get("request") is None and state["intent"].get("intent") == "register":      # could not even draft it
+        text = state["answer"]
+    elif decision and decision["status"] == "rejected":
+        text = f"Your request was not approved. Reason: {decision['note']}"
+    else:
+        lines = [state.get("answer", "")]
+        if state.get("version_note"):
+            lines.append(f"(Version note: {state['version_note']})")
+        lines += [f"  [cite] {Citation(**c).label()}" for c in state.get("citations") or []]
+        text = "\n".join(lines)
+    return {"reply": text, "messages": turn_messages(state.get("messages", []), state["question"], text)}
 
 
 # ---- routes: functions that return the NAME of the next node --------------------------------
@@ -190,10 +201,13 @@ def build_graph(checkpointer=None):
     return g.compile(checkpointer=checkpointer)
 
 
-def run(graph, question: str, student_id: str = "C233001", show=print) -> dict:
-    """Stream one message through the graph, printing each node as it finishes."""
+def run(graph, question: str, student_id: str = "C233001", show=print, thread_id: str | None = None) -> dict:
+    """Stream one message through the graph, printing each node as it finishes.
+
+    With a checkpointer, `thread_id` picks the conversation: the same id continues it."""
     state: dict[str, Any] = {"question": question, "student_id": student_id}
-    for update in graph.stream(state, stream_mode="updates"):
+    config = {"configurable": {"thread_id": thread_id}} if thread_id else None
+    for update in graph.stream(state, config, stream_mode="updates"):
         for node, changes in update.items():
             changes = changes or {}          # a node that changed nothing reports None
             state |= changes
