@@ -40,6 +40,10 @@ classify_prompt: |
   makes it clear; otherwise leave empty), whether an exception is requested, and student_id: copy a
   student ID only if the message TEXT contains one (like C233001), otherwise null. Never invent one.
 
+  Set asks_about_other_person=true when the message asks to SEE another person's private details:
+  their phone number, email, ID, registrations, status or which events they joined. Asking whether a
+  named teammate is ELIGIBLE for an event, or naming teammates in a registration, is NOT this.
+
   Message: {question}
 
 extract_prompt_version: v1

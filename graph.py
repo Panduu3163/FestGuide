@@ -130,6 +130,9 @@ def register_team(state: State) -> dict:
 
 
 def out_of_scope(state: State) -> dict:
+    if state["intent"].get("asks_about_other_person"):          # C5: a student sees only their own records
+        return {"answer": "I can't share another student's personal details or registrations. "
+                          "Each student can check their own status in their own chat."}
     return {"answer": "I can only help with the IIUC CSE Fest 2026 events: their rules, your eligibility, "
                       "schedule clashes and registration. For anything else, please contact the organizers."}
 
@@ -151,6 +154,8 @@ def compose_reply(state: State) -> dict:
 # ---- routes: functions that return the NAME of the next node --------------------------------
 
 def after_classify(state: State) -> str:
+    if state["intent"]["asks_about_other_person"]:               # never reaches a tool: nothing to leak
+        return "out_of_scope"
     return {"rules": "retrieve", "plan": "tool_agent", "register": "tool_agent"}.get(state["intent"]["intent"], "out_of_scope")
 
 

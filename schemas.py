@@ -47,6 +47,7 @@ class Intent(BaseModel):
     events: list[EventKey] = Field(default_factory=list, description="Events the message names, by key. Empty if none.")
     student_id: str | None = Field(default=None, description="A student ID like C233001 if the message gives one, else null.")
     wants_exception: bool = Field(default=False, description="True if the student asks for an exception, waiver or special permission.")
+    asks_about_other_person: bool = Field(default=False, description="True if the message asks to see ANOTHER person's private details (phone, email, ID, registrations, status, events joined).")
     reason: str = Field(description="One short sentence: why this intent.")
 
 
