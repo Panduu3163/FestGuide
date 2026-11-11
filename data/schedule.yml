@@ -1,0 +1,10 @@
+# Start/end times per event day. source: rulebook = printed in the PDF, mock = invented
+# by us because the rulebook gives none. MOCK data is labelled as such in answers.
+schedule:
+  - {event: solo_programming,  date: 2026-06-15, start: "09:00", end: "12:30", source: rulebook}  # 3 to 3.5 hours
+  - {event: idea_generation,   date: 2026-06-15, start: "14:00", end: "17:00", source: mock}
+  - {event: three_mt,          date: 2026-06-14, start: "10:30", end: "13:00", source: rulebook}  # female 10:30; male 13:40 (rulebook)
+  - {event: project_showcase,  date: 2026-06-14, start: "10:00", end: "15:00", source: mock}
+  - {event: videography,       date: 2026-06-16, start: "10:00", end: "13:00", source: mock}
+  - {event: debate,            date: 2026-06-12, start: "10:00", end: "16:00", source: mock}      # male preliminary day
+  - {event: tech_olympiad,     date: null,       start: null,    end: null,    source: mock}      # no date in the rulebook

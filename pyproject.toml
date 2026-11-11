@@ -1,0 +1,25 @@
+[project]
+name = "festguide"
+version = "0.1.0"
+description = "FestGuide: IIUC CSE Fest 2026 rulebook and registration assistant (terminal chat + organizer terminal)"
+requires-python = ">=3.12"
+
+# Same stack and version ranges as the course repo, so what we learned there still applies.
+dependencies = [
+    "langchain>=1.3.14,<2",
+    "langgraph>=1.2.10,<1.3",
+    "langchain-google-genai>=4.3.2,<5",     # Gemini chat + embeddings
+    "langchain-openrouter>=0.2.9,<0.3",      # fallback model
+    "qdrant-client[fastembed]>=1.15",        # embedded vector store + local embeddings
+    "langchain-qdrant>=1.0",
+    "langchain-text-splitters>=1.1",
+    "pypdf>=6.0",
+    "pydantic>=2.11,<3",
+    "pydantic-settings>=2.8",
+    "pyyaml>=6.0",
+    "python-dotenv>=1.1",
+    "langgraph-checkpoint-sqlite>=3.1,<4",   # chat memory + durable pause/resume
+]
+
+[tool.uv]
+package = false

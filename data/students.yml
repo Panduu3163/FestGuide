@@ -1,0 +1,243 @@
+# 30 SYNTHETIC students (source: mock). Invented names and phone numbers; no real people.
+# The phone numbers exist so the privacy guardrail has something to protect.
+students:
+- id: C233001
+  name: Arif Hossain
+  department: CSE
+  year: 2
+  level: undergraduate
+  gender: male
+  phone: '01516252221'
+  source: mock
+- id: C233002
+  name: Rafi Ahmed
+  department: CSE
+  year: 2
+  level: undergraduate
+  gender: male
+  phone: 01729361589
+  source: mock
+- id: E233003
+  name: Tania Sultana
+  department: EEE
+  year: 2
+  level: undergraduate
+  gender: female
+  phone: 01523831903
+  source: mock
+- id: T233004
+  name: Nusrat Begum
+  department: ETE
+  year: 2
+  level: undergraduate
+  gender: female
+  phone: 01383517017
+  source: mock
+- id: C243005
+  name: Sakib Ahmed
+  department: CSE
+  year: 1
+  level: undergraduate
+  gender: male
+  phone: 01781366283
+  source: mock
+- id: T223006
+  name: Mim Islam
+  department: ETE
+  year: 3
+  level: undergraduate
+  gender: female
+  phone: 01758530762
+  source: mock
+- id: C233007
+  name: Tanvir Rahman
+  department: CSE
+  year: 2
+  level: undergraduate
+  gender: male
+  phone: 01520986393
+  source: mock
+- id: C223008
+  name: Farhan Begum
+  department: CSE
+  year: 3
+  level: undergraduate
+  gender: female
+  phone: '01670241505'
+  source: mock
+- id: C243009
+  name: Sadia Rahman
+  department: CSE
+  year: 1
+  level: undergraduate
+  gender: male
+  phone: 01732140838
+  source: mock
+- id: C233010
+  name: Imran Chowdhury
+  department: CSE
+  year: 2
+  level: undergraduate
+  gender: female
+  phone: 01715262308
+  source: mock
+- id: T223011
+  name: Jannat Ahmed
+  department: ETE
+  year: 3
+  level: undergraduate
+  gender: female
+  phone: 01689774974
+  source: mock
+- id: E213012
+  name: Rakib Uddin
+  department: EEE
+  year: 4
+  level: undergraduate
+  gender: male
+  phone: '01346230636'
+  source: mock
+- id: B243013
+  name: Shila Uddin
+  department: BBA
+  year: 1
+  level: undergraduate
+  gender: male
+  phone: 01696856164
+  source: mock
+- id: C213014
+  name: Nayeem Begum
+  department: CSE
+  year: 4
+  level: undergraduate
+  gender: female
+  phone: 01799745048
+  source: mock
+- id: B243015
+  name: Mahi Chowdhury
+  department: BBA
+  year: 1
+  level: undergraduate
+  gender: female
+  phone: '01632555071'
+  source: mock
+- id: B243016
+  name: Hasan Begum
+  department: BBA
+  year: 1
+  level: undergraduate
+  gender: female
+  phone: 01339287351
+  source: mock
+- id: E233017
+  name: Ayesha Rahman
+  department: EEE
+  year: 2
+  level: undergraduate
+  gender: male
+  phone: 01762472380
+  source: mock
+- id: C243018
+  name: Zubair Uddin
+  department: CSE
+  year: 1
+  level: undergraduate
+  gender: male
+  phone: 01763907779
+  source: mock
+- id: C223019
+  name: Lamia Khan
+  department: CSE
+  year: 3
+  level: undergraduate
+  gender: male
+  phone: 01783849218
+  source: mock
+- id: B213020
+  name: Sohan Rahman
+  department: BBA
+  year: 4
+  level: undergraduate
+  gender: female
+  phone: 01740970943
+  source: mock
+- id: E243021
+  name: Ripon Sultana
+  department: EEE
+  year: 1
+  level: undergraduate
+  gender: male
+  phone: '01541132723'
+  source: mock
+- id: C243022
+  name: Tasnim Akter
+  department: CSE
+  year: 1
+  level: undergraduate
+  gender: female
+  phone: '01545265254'
+  source: mock
+- id: C243023
+  name: Fahim Rahman
+  department: CSE
+  year: 1
+  level: undergraduate
+  gender: male
+  phone: 01781751584
+  source: mock
+- id: C223024
+  name: Orin Chowdhury
+  department: CSE
+  year: 3
+  level: undergraduate
+  gender: male
+  phone: 01371289682
+  source: mock
+- id: C213025
+  name: Mamun Khan
+  department: CSE
+  year: 4
+  level: undergraduate
+  gender: female
+  phone: 01762897893
+  source: mock
+- id: C213026
+  name: Priya Ahmed
+  department: CSE
+  year: 4
+  level: undergraduate
+  gender: female
+  phone: 01335583179
+  source: mock
+- id: E233027
+  name: Shuvo Ahmed
+  department: EEE
+  year: 2
+  level: undergraduate
+  gender: female
+  phone: '01524754327'
+  source: mock
+- id: C243028
+  name: Rumana Chowdhury
+  department: CSE
+  year: 1
+  level: undergraduate
+  gender: male
+  phone: 01386072408
+  source: mock
+- id: C243029
+  name: Kabir Sultana
+  department: CSE
+  year: 1
+  level: undergraduate
+  gender: female
+  phone: 01319437596
+  source: mock
+- id: C213030
+  name: Anika Akter
+  department: CSE
+  year: 4
+  level: undergraduate
+  gender: male
+  phone: 01656625835
+  source: mock
