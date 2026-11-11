@@ -4,6 +4,7 @@ Course pattern (session 3): one typed settings object instead of constants scatt
 around. Every field has a working default; override any of them in .env as FESTGUIDE_<NAME>.
 Keys (GEMINI_API_KEY ...) are read by the libraries themselves from the environment.
 """
+from datetime import date
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -18,7 +19,8 @@ class Settings(BaseSettings):
 
     DATA_DIR: Path = ROOT / "data"
     RULEBOOK_DIR: Path = ROOT / "rulebooks"
-    STATE_DIR: Path = ROOT / ".state"        # git-ignored: Qdrant index, checkpoints, database
+    STATE_DIR: Path = ROOT / ".state"        # git-ignored: checkpoints and the registrations database
+    QDRANT_DIR: Path = ROOT / ".state" / "qdrant"   # git-ignored: the rulebook index (its own folder, so tests can move STATE_DIR)
 
     # --- models (course session 4: one string, "provider:model") ---
     MODEL: str = "google_genai:gemini-3.5-flash-lite"
@@ -26,10 +28,16 @@ class Settings(BaseSettings):
     MAX_OUTPUT_TOKENS: int = 2048
     REQUEST_TIMEOUT_S: int = 60
     MAX_RETRIES: int = 2
+    REQUESTS_PER_SECOND: float = 0.22        # Gemini free tier: 15 requests a minute for this model
 
     # --- embeddings: "gemini-embedding-001" (Gemini) or "fastembed:BAAI/bge-small-en-v1.5" (local, no key) ---
     EMBED_MODEL: str = "gemini-embedding-001"
     EMBED_DIM: int = 768
+
+    # --- the "pretend today" for deadline checks: the fest dates are in June 2026, so the demo sets
+    #     a date inside the fest window (proposal, risk table). Registration for the debate is 2-10 June. ---
+    TODAY: date = date(2026, 6, 5)
+    MAX_TOOL_STEPS: int = 6                  # the fuse: the tool loop stops after this many model calls
 
     # --- RAG (course sessions 8-9) ---
     CHUNK_SIZE: int = 800
@@ -42,7 +50,7 @@ class Settings(BaseSettings):
 
     @property
     def qdrant_path(self) -> Path:
-        return self.STATE_DIR / "qdrant"
+        return self.QDRANT_DIR
 
     @property
     def embed_provider(self) -> str:

@@ -25,3 +25,8 @@ CSE Fest 2026 PDFs, used with permission.
     uv run python extract_rules.py       # rulebooks -> data/events.yml (checked against the text)
     uv run python graph.py               # run four sample messages through the graph
     uv run python kb/audit.py            # check cleaned rulebooks and retrieval
+- M3 tools and agent loop (C3): tools.py, agent.py, draft.py
+
+    uv run python tests/check_tools.py      # tool logic, no model, free
+    uv run python tests/check_agent.py      # real messages through the graph (about 20 model calls)
+    uv run python graph.py                  # seven sample messages with tool calls shown

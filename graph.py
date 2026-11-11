@@ -21,6 +21,8 @@ from typing import Any, TypedDict
 from langgraph.graph import END, START, StateGraph
 
 from kb import rag, store
+from agent import run_tools
+from draft import build_request
 from models import build_model, load_prompt
 from schemas import Intent
 
@@ -34,7 +36,7 @@ class State(TypedDict, total=False):
     answer: str                # answer text (rules route)
     citations: list            # Citation objects
     version_note: str
-    tool_result: str           # result of the tools (plan / register routes)
+    tool_log: list             # every tool call and result of the tool loop (plan / register routes)
     request: dict              # a drafted registration or exception request
     decision: dict             # the organizer's decision {"status": "approved" | "rejected", "note": ...}
     reply: str                 # the final text shown to the student
@@ -65,7 +67,7 @@ _cls = None
 
 def _classifier():
     global _cls
-    _cls = _cls or build_model().with_structured_output(Intent)
+    _cls = _cls or build_model(schema=Intent)
     return _cls
 
 
@@ -81,18 +83,40 @@ def answer(state: State) -> dict:
 
 
 def tool_agent(state: State) -> dict:
-    """C3: calls check_eligibility, check_schedule_clash, get_registration_status. (stub: M3)"""
-    return {"tool_result": "(tool agent: milestone M3)"}
+    """C3: the tool loop. The model picks tools (eligibility, clash, status, rule search); the code runs them."""
+    intent = state["intent"]
+    log = run_tools(state["standalone"], state["student_id"], intent["intent"], intent["events"])
+    return {"tool_log": log}
 
 
 def explain_result(state: State) -> dict:
-    """Explain a clash or eligibility result in plain words. (stub: M3)"""
-    return {"answer": state["tool_result"]}
+    """Turn the tool results into a plain-words answer. It may use only what the tools returned."""
+    template, version = load_prompt("explain_prompt")
+    log = json.dumps(state["tool_log"], default=str, indent=1)
+    if not state["tool_log"]:
+        return {"answer": "I could not find anything to check for that. Which events or which student do you mean?"}
+    text = _explainer().invoke(template.format(question=state["standalone"], log=log),
+                               config={"run_name": "explain_result", "tags": [f"prompt:explain_prompt:{version}"]}).text
+    return {"answer": text}
+
+
+_exp = None
+
+
+def _explainer():
+    global _exp
+    _exp = _exp or build_model()
+    return _exp
 
 
 def draft_request(state: State) -> dict:
-    """Build the registration / exception request from the checked facts. (stub: M5)"""
-    return {"request": {"student_id": state.get("student_id"), "events": state["intent"]["events"]}}
+    """Build the registration / exception request from the checked facts (draft.py), or say why it cannot be built."""
+    intent = state["intent"]
+    request, message = build_request(state["student_id"], state["standalone"], intent["events"],
+                                     intent["wants_exception"], state["tool_log"])
+    if request is None:
+        return {"request": None, "answer": message}
+    return {"request": request}
 
 
 def approval_gate(state: State) -> dict:
@@ -113,6 +137,8 @@ def out_of_scope(state: State) -> dict:
 def compose_reply(state: State) -> dict:
     """Build the final text. Memory (C4) is saved by the checkpointer around the whole run. (M4)"""
     decision = state.get("decision")
+    if state.get("request") is None and state["intent"]["intent"] == "register":      # could not even draft it
+        return {"reply": state["answer"]}
     if decision and decision["status"] == "rejected":
         return {"reply": f"Your request was not approved. Reason: {decision['note']}"}
     lines = [state.get("answer", "")]
@@ -132,6 +158,10 @@ def after_tools(state: State) -> str:
     return "draft_request" if state["intent"]["intent"] == "register" else "explain_result"
 
 
+def after_draft(state: State) -> str:
+    return "approval_gate" if state.get("request") else "compose_reply"
+
+
 def after_approval(state: State) -> str:
     return "register_team" if state["decision"]["status"] == "approved" else "compose_reply"
 
@@ -147,7 +177,7 @@ def build_graph(checkpointer=None):
     g.add_conditional_edges("classify", after_classify, ["retrieve", "tool_agent", "out_of_scope"])
     g.add_edge("retrieve", "answer")
     g.add_conditional_edges("tool_agent", after_tools, ["draft_request", "explain_result"])
-    g.add_edge("draft_request", "approval_gate")
+    g.add_conditional_edges("draft_request", after_draft, ["approval_gate", "compose_reply"])
     g.add_conditional_edges("approval_gate", after_approval, ["register_team", "compose_reply"])
     for last in ("answer", "explain_result", "register_team", "out_of_scope"):
         g.add_edge(last, "compose_reply")
@@ -164,20 +194,30 @@ def run(graph, question: str, student_id: str = "C233001", show=print) -> dict:
             state |= changes
             extra = f"  {json.dumps(changes['intent'])}" if node == "classify" else ""
             show(f"  -> {node}{extra}")
+            if node == "draft_request" and changes.get("request"):           # what the organizer will see
+                req = changes["request"]
+                show(f"       [request] {req['kind']} for {req['event_name']}: team {[req['leader_id']] + req['member_ids']}; "
+                     f"problems: {req['problems'] or 'none'}; {req['fee_note']}")
+            for call in changes.get("tool_log") or []:                       # show every tool call
+                show(f"       [tool] {call['tool']}({json.dumps(call['args'])}) -> {json.dumps(call['result'], default=str)[:150]}")
     return state
 
 
-SAMPLES = [
-    "Can I use ChatGPT during the programming contest?",
-    "Do the programming contest and Idea Generation clash? I'm C233001.",
-    "Register me, Rafi and Tania for Idea Generation. I'm the leader.",
-    "What's the weather in Chittagong tomorrow?",
+SAMPLES = [   # (message, asking student)
+    ("Can I use ChatGPT during the programming contest?", "C233001"),
+    ("Do the programming contest and Idea Generation clash?", "C233001"),
+    ("Do 3MT and Project Showcase clash?", "C233001"),
+    ("Can Tania and I join Idea Generation?", "C233001"),
+    ("What am I registered for?", "C233002"),
+    ("Register me, Rafi and Tania for Idea Generation. I'm the leader.", "C233001"),
+    ("What's the weather in Chittagong tomorrow?", "C233001"),
 ]
 
 if __name__ == "__main__":
     graph = build_graph()
     print(graph.get_graph().draw_mermaid() if "--mermaid" in sys.argv else "")
-    for q in ([" ".join(sys.argv[1:])] if len(sys.argv) > 1 and not sys.argv[1].startswith("--") else SAMPLES):
-        print(f"\nQ: {q}")
-        print(run(graph, q)["reply"])
+    cli = [(" ".join(sys.argv[1:]), "C233001")] if len(sys.argv) > 1 and not sys.argv[1].startswith("--") else SAMPLES
+    for q, student in cli:
+        print(f"\nQ ({student}): {q}")
+        print(run(graph, q, student)["reply"])
     store.close()

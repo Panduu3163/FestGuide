@@ -62,7 +62,7 @@ def to_record(rules: EventRules) -> dict:
 def main() -> None:
     base = yaml.safe_load((settings.DATA_DIR / "events.hand.yml").read_text(encoding="utf-8"))["events"]
     mock = yaml.safe_load((settings.DATA_DIR / "mock_fill.yml").read_text(encoding="utf-8"))
-    model = build_model().with_structured_output(EventRules)
+    model = build_model(schema=EventRules)
     template, version = load_prompt("extract_prompt")
     out, total_flags = {}, 0
 

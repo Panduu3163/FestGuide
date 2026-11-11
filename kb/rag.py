@@ -52,7 +52,7 @@ def format_context(docs: list[Document]) -> str:
 
 @lru_cache
 def _model():
-    return build_model().with_structured_output(RagAnswer)
+    return build_model(schema=RagAnswer)
 
 
 def retrieve(state: dict) -> dict:
