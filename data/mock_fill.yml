@@ -1,0 +1,13 @@
+# MOCK values for facts a rulebook does not give. The extractor leaves them null, then this
+# file fills them and marks them in events.yml under mock_fields (so answers can say "mock").
+# Only Tech Olympiad needs it: its rulebook has no team size, fee, date or eligibility.
+tech_olympiad:
+  team_min: 1
+  team_max: 1
+  fee_bdt: 80
+  fee_per: participant
+  event_date: 2026-06-13
+  reg_deadline: 2026-06-11
+  all_departments: true
+  eligible_level: any
+  one_team_only: true

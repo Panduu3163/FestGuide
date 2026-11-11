@@ -21,3 +21,41 @@ rag_prompt: |
   {context}
 
   Question: {question}
+
+classify_prompt_version: v1
+classify_prompt: |
+  You route messages for FestGuide, the assistant for IIUC CSE Fest 2026.
+  The events (use these keys): solo_programming (Solo Programming Contest), videography,
+  debate (Logical Legends Debate), tech_olympiad, idea_generation, three_mt (Three Minute Thesis),
+  project_showcase.
+
+  Pick ONE intent:
+  - rules: a question about the rules, fees, dates, team size, eligibility or schedule text of the events.
+  - plan: the student wants to know if THEY can join events, whether events clash in time, or the
+    status of their own registrations.
+  - register: the student wants to register a team, or asks for an exception, waiver or special permission.
+  - other: anything else (weather, homework, politics, requests about other people's private data...).
+
+  Also return the events the message names (resolve "the second one" or "it" only if the message itself
+  makes it clear; otherwise leave empty), a student ID if the message contains one, and whether an
+  exception is requested.
+
+  Student ID known from the chat session: {student_id}
+  Message: {question}
+
+extract_prompt_version: v1
+extract_prompt: |
+  You read ONE event rulebook of IIUC CSE Fest 2026 and extract its registration facts.
+  Return only what the text states. If a fact is not stated, return null (or an empty list). Never guess.
+
+  Notes:
+  - FSE means the Faculty of Science and Engineering, i.e. CSE, EEE, ETE, CE, CCE, Pharmacy and similar
+    departments. If the rulebook says "open to all FSE students", set all_departments=false and
+    departments=["CSE","EEE","ETE","CE","CCE","Pharmacy"].
+  - "Open to all IIUC students" means all_departments=true.
+  - A solo event has team_min=1 and team_max=1.
+  - The year of every date is 2026. If several dates are given, use the first competition date.
+  - Put short VERBATIM quotes from the text into `evidence`, one for each fact you extracted.
+
+  Rulebook ({event}):
+  {text}

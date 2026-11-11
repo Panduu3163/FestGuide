@@ -20,3 +20,8 @@ CSE Fest 2026 PDFs, used with permission.
     uv run python kb/make_mock_v1.py     # mock earlier versions for version handling
     uv run python kb/ingest.py           # build the Qdrant index in .state/qdrant
     uv run python kb/rag.py "Can I use ChatGPT during the programming contest?"
+- M2 structured output (Intent, EventRules), offline rule extractor, graph skeleton (C1, C7)
+
+    uv run python extract_rules.py       # rulebooks -> data/events.yml (checked against the text)
+    uv run python graph.py               # run four sample messages through the graph
+    uv run python kb/audit.py            # check cleaned rulebooks and retrieval

@@ -1,0 +1,100 @@
+# DRAFT events.yml, written by hand from the rulebooks so milestones M1-M5 have data.
+# In M2 the offline rule extractor regenerates this file with structured output and
+# checks every value against the rulebook text. Fields set to null are NOT in the rulebook.
+# Dates are June 2026. source: rulebook = read from the PDF, mock = invented by us.
+events:
+  solo_programming:
+    name: Intra-IIUC Solo Programming Contest
+    rulebook: INTRA-IIUC SOLO PROGRAMMING CONTEST  CSE FEST 2026 Rulebook.pdf
+    team_min: 1
+    team_max: 1
+    fee_bdt: null              # not stated in the rulebook
+    fee_per: null
+    event_date: 2026-06-15
+    reg_deadline: null         # not stated
+    eligible_departments: all  # "all currently enrolled students of IIUC" (section 1)
+    eligible_level: any
+    one_team_only: true
+    source: rulebook
+  videography:
+    name: CSE Fest Videography Contest
+    rulebook: CSE Fest Videography Contest Rulebook 2026.pdf
+    team_min: 1
+    team_max: 1
+    fee_bdt: 50
+    fee_per: participant
+    event_date: 2026-06-16
+    reg_deadline: null
+    eligible_departments: all  # "all IIUC students regardless of department" (1.2)
+    eligible_level: any
+    one_team_only: true
+    source: rulebook
+  debate:
+    name: Logical Legends Debate Championship
+    rulebook: Logical Legends Debate Championship 2026 - Official Rulebook (1).pdf
+    team_min: 3
+    team_max: 3
+    fee_bdt: 1050
+    fee_per: team              # non-refundable
+    event_date: 2026-06-12     # male preliminary; female 13 June; final 20 June
+    reg_deadline: 2026-06-10   # registration period 2-10 June
+    eligible_departments: all  # cross-department teams allowed
+    eligible_level: any
+    one_team_only: true
+    source: rulebook
+  tech_olympiad:
+    name: Tech Olympiad
+    rulebook: Tech_Olympiad_2026_Rulebook_and_Syllabus.pdf
+    # The rulebook gives none of these, so the values below are MOCK (invented by the author).
+    team_min: 1
+    team_max: 1
+    fee_bdt: 80
+    fee_per: participant
+    event_date: 2026-06-13
+    reg_deadline: 2026-06-11
+    eligible_departments: all
+    eligible_level: any
+    one_team_only: true
+    source: rulebook
+    mock_fields: [team_min, team_max, fee_bdt, fee_per, event_date, reg_deadline, eligible_departments, eligible_level, one_team_only]
+  idea_generation:
+    name: Idea Generation Competition
+    rulebook: rulebook_idea_generation.pdf
+    team_min: 2
+    team_max: 3
+    fee_bdt: null
+    fee_per: null
+    event_date: 2026-06-15
+    reg_deadline: null
+    # Rulebook: "Open for all FSE students". FSE = Faculty of Science and Engineering
+    # (confirmed by the author), so CSE, EEE, ETE, CE, CCE, Pharmacy etc. are all eligible.
+    eligible_departments: [CSE, EEE, ETE, CE, CCE, Pharmacy]
+    eligible_level: any
+    one_team_only: true
+    source: rulebook
+  three_mt:
+    name: Three Minute Thesis (3MT)
+    rulebook: 3MT rulebook-1 (1).pdf
+    team_min: 1
+    team_max: 1
+    fee_bdt: 100
+    fee_per: participant
+    event_date: 2026-06-14
+    reg_deadline: 2026-06-12
+    eligible_departments: [CSE]
+    eligible_level: any
+    one_team_only: true
+    source: rulebook
+  project_showcase:
+    name: Project Showcase
+    rulebook: Project Showcase Rulebook.pdf
+    team_min: 3
+    team_max: 5
+    fee_bdt: null              # "registration fee" is listed but no amount is readable
+    fee_per: team
+    event_date: 2026-06-14
+    reg_deadline: null
+    eligible_departments: [CSE]
+    eligible_level: undergraduate
+    one_team_only: true
+    source: rulebook
