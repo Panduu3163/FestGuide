@@ -1,0 +1,10 @@
+.env
+.venv
+.state
+.git
+__pycache__
+*.pyc
+tests
+docs
+rulebooks/*.pdf
+rulebooks/draft

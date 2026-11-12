@@ -103,6 +103,7 @@ async function refresh() {
   }
 }
 
+fetch("/api/config").then((r) => r.json()).then((c) => { if (c.demo) $("pin").hidden = true; }).catch(() => {});
 refresh();
 setInterval(refresh, 3000);
 $("pin").addEventListener("change", refresh);

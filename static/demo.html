@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FestGuide - Live Demo</title>
+<link rel="stylesheet" href="/static/style.css">
+<style>
+  body { height: 100vh; display: flex; flex-direction: column; }
+  .intro { padding: 10px 16px; font-size: 14px; color: var(--muted); border-bottom: 1px solid var(--line); background: var(--card); }
+  .intro b { color: var(--ink); }
+  .panes { flex: 1; display: grid; grid-template-columns: 1fr 1fr; min-height: 0; }
+  .pane { display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--line); }
+  .pane h2 { margin: 0; padding: 8px 16px; font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); background: var(--card); border-bottom: 1px solid var(--line); }
+  iframe { flex: 1; width: 100%; border: 0; min-height: 0; background: var(--bg); }
+  @media (max-width: 800px) { .panes { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; } }
+</style>
+</head>
+<body>
+<div class="intro">
+  <b>FestGuide</b> answers questions about the IIUC CSE Fest 2026 rulebooks with citations, checks eligibility and clashes, and sends registrations to an organizer.
+  Try it: in the left pane press <b>Register me and Rafi for Idea Generation</b>, then approve it in the right pane and watch the left pane update.
+  All students and registrations are invented.
+</div>
+<div class="panes">
+  <section class="pane"><h2>Student</h2><iframe src="/" title="Student"></iframe></section>
+  <section class="pane"><h2>Organizer</h2><iframe src="/organizer" title="Organizer"></iframe></section>
+</div>
+</body>
+</html>

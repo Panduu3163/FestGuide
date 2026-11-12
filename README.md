@@ -94,3 +94,10 @@ The live demo script is in `docs/demo.md`; a recorded backup run is in `docs/bac
   the cited rule and what the student wrote; approve with a note, or reject with a reason. Set `ORGANIZER_PIN` in
   `.env` to make the organizer endpoints need a PIN. The student picker stands in for a login (mock students only;
   phone numbers never leave the server). To publish it, put it behind real sign-in first.
+- M11 hosted-demo mode: `DEMO_MODE=1` in web.py, `/demo` page, Dockerfile, render.yaml, docs/deploy.md
+
+    DEMO_MODE=1 uv run python web.py      # then http://127.0.0.1:8000/demo (student and organizer side by side)
+
+  For a public site: per-visitor chats and inboxes, rate limits (30 messages per hour per visitor, 300 a day), registrations
+  reset to the seed teams every 30 minutes and on "Reset demo". The host must be a container host (Render, Fly, Railway), not
+  Vercel: the pause-and-approve flow needs a disk that persists between requests. See `docs/deploy.md`.

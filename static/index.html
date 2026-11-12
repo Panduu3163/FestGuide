@@ -12,7 +12,8 @@
   <span class="badge">IIUC CSE Fest 2026 · mock data</span>
   <span class="sp"></span>
   <label>Chatting as <select id="who"></select></label>
-  <a href="/organizer" target="_blank">Organizer page ↗</a>
+  <button type="button" class="ghost" id="reset" hidden>Reset demo</button>
+  <a href="/organizer" target="_blank" id="orglink">Organizer page ↗</a>
 </header>
 <main>
   <div class="chips" id="chips"></div>
@@ -121,7 +122,16 @@ SAMPLES.forEach((q) => {
   $("chips").append(b);
 });
 
+$("reset").addEventListener("click", async () => {      // demo mode only: forget my chats, restore the seed registrations
+  await api("/api/demo/reset", { method: "POST" });
+  await loadConversation();
+});
+
 (async () => {
+  if ((await api("/api/config")).demo) {
+    $("reset").hidden = false;
+    if (window.self !== window.top) $("orglink").hidden = true;      // inside /demo the organizer is already beside it
+  }
   const list = await api("/api/students");
   list.forEach((s) => who.append(new Option(`${s.name} (${s.id}, ${s.department})`, s.id)));
   who.value = "C233001";
