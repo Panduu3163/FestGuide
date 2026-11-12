@@ -29,6 +29,7 @@ from pydantic import ValidationError
 from kb import rag, store
 from agent import run_tools
 from draft import build_request
+from config import settings
 from guards import check_message
 from memory import history_text, turn_messages
 from models import build_model, load_prompt
@@ -134,7 +135,9 @@ def _classifier():
 
 def retrieve(state: State) -> dict:
     """C6: search the rulebooks. If the question names exactly one event we could filter (E3 stretch)."""
-    return rag.retrieve({"question": state["standalone"]})
+    events = state["intent"].get("events") or []
+    only = events[0] if settings.EVENT_FILTER and len(events) == 1 else None   # exactly one event named: search only its rulebook
+    return rag.retrieve({"question": state["standalone"], "event": only})
 
 
 def answer(state: State) -> dict:

@@ -45,6 +45,8 @@ class Settings(BaseSettings):
     CHUNK_SIZE: int = 800
     CHUNK_OVERLAP: int = 100
     RAG_K: int = 5
+    RETRIEVAL_MODE: str = "dense"       # "dense", "keyword" or "hybrid" (E3; see kb/compare_retrieval.py)
+    EVENT_FILTER: bool = True          # E3: when the message names exactly one event, search only that rulebook
 
     @property
     def db_path(self) -> Path:

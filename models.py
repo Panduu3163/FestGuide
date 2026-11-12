@@ -55,7 +55,9 @@ def build_model(schema=None, tools=None):
     def prepared(model_id: str):
         m = make_model(model_id)
         if schema is not None:
-            m = m.with_structured_output(schema) | RunnableLambda(_must_parse)
+            # a reply that does not fit the schema is retried (up to 3 tries) before it counts as a failure
+            m = (m.with_structured_output(schema) | RunnableLambda(_must_parse)).with_retry(
+                retry_if_exception_type=(ValueError,), stop_after_attempt=3, wait_exponential_jitter=False)
         if tools is not None:
             m = m.bind_tools(tools)
         return m

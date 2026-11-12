@@ -29,19 +29,23 @@ VERSION_WORDS = re.compile(r"\b(older|old|previous|earlier|prior|original|newer|
                            r"(\s+(rulebook|rulebooks|version|versions|edition|rules))?\b|\b(rulebook|version) history\b", re.I)
 
 
-def search(question: str, k: int | None = None, event: str | None = None, version: str | None = None) -> list[Document]:
+def search(question: str, k: int | None = None, event: str | None = None, version: str | None = None,
+           mode: str | None = None) -> list[Document]:
     """The best k SECTIONS for a question, each with its versions.
 
     The 2026 text and its mock v1 twin score almost the same, so taking the top k chunks would
     spend half the slots on twins. Instead: fetch 3x as many, group chunks that share
     (event, section, page), keep the best k groups, and give the model every version in them.
-    That is how it can notice that v1 said something different."""
+    That is how it can notice that v1 said something different.
+
+    E3 (advanced retrieval): `event` limits the search to one rulebook (a metadata filter), and `mode` picks
+    "dense" (meaning), "keyword" (BM25) or "hybrid" (both, fused). kb/compare_retrieval.py measures them."""
     k = k or settings.RAG_K
     # "older rulebook" says nothing about WHERE the answer is; left in, it pulls in unrelated sections
     question = " ".join(VERSION_WORDS.sub(" ", question).split()) or question
     fields = {name: value for name, value in (("event", event), ("version", version)) if value}
     flt = store.where(**fields) if fields else None      # `version="2026"`: only the current rulebook text
-    hits = store.vector_store("dense").similarity_search(question, k=k * 3, filter=flt)
+    hits = store.vector_store(mode or settings.RETRIEVAL_MODE).similarity_search(question, k=k * 3, filter=flt)
     groups: dict[tuple, list[Document]] = {}
     for d in hits:                                   # hits are best-first, so groups keep that order
         m = d.metadata

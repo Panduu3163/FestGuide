@@ -55,3 +55,10 @@ CSE Fest 2026 PDFs, used with permission.
 
   Change the model or a prompt, run the scorecard again, and compare the two experiments in LangSmith.
   Traces contain what students type (private numbers are hidden only after the first step), so use mock data.
+- M8 advanced retrieval (E3, stretch): event filter on, hybrid search available but off
+
+    uv run python kb/compare_retrieval.py                 # dense vs filter vs hybrid, no model calls
+
+  Measured with the local embedder (26 questions): the event filter raised hit@1 from 4 to 8 of 10 on questions
+  that do not name the event; hybrid (BM25 + dense) added nothing and lost some. So `EVENT_FILTER=true` is the
+  default and `RETRIEVAL_MODE` stays "dense" (`FESTGUIDE_RETRIEVAL_MODE=hybrid` to try it).
