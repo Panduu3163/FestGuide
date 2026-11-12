@@ -23,8 +23,8 @@ A static front end on Vercel with the API on Render is possible, but it needs cr
 ## Steps (you do these; they need your accounts)
 
 1. **Push the repo to GitHub** (private is fine; Render can read private repos).
-   Before making it public, decide about `rulebooks/*.pdf`: they are the organizers' real documents. The image does not need
-   them (`.dockerignore` skips them; the demo uses `rulebooks/clean/*.md`), so you can remove the PDFs from the repo first.
+   The organizers' original PDFs are not in the repo (they are git-ignored and were removed from its history). The image
+   does not need them: the demo uses `rulebooks/clean/*.md`.
 2. On render.com: **New > Blueprint**, pick the repo. Render reads `render.yaml`.
 3. In the service's **Environment** tab, set the two secrets: `GEMINI_API_KEY` and `OPENROUTER_API_KEY`.
    Never put them in a file in the repo. (`.env` is git-ignored and is not copied into the image.)

@@ -4,8 +4,9 @@ IIUC CSE Fest 2026 rulebook and registration assistant. Terminal chat for studen
 a second terminal for the organizer. Built for the CSE Industrial Training 2026
 (AI/LLM Application Builder, Grow with Data) by Mynul Kabir Nayem, C223163.
 
-All student and registration data is **mock** (synthetic). Rulebooks are the real
-CSE Fest 2026 PDFs, used with permission.
+All student and registration data is **mock** (synthetic). The answers come from the real
+CSE Fest 2026 rulebooks, used with permission. The original PDFs are not in this repo;
+the cleaned text the app searches is in `rulebooks/clean/`.
 
     uv sync
     Copy-Item .env.example .env      # then paste your keys into .env (it is git-ignored)
@@ -31,7 +32,7 @@ The live demo script is in `docs/demo.md`; a recorded backup run is in `docs/bac
 - M0 setup and mock data
 - M1 RAG with citations (C6)
 
-    uv run python kb/extract_pdfs.py     # PDF -> rough text drafts (rulebooks/draft)
+    uv run python kb/extract_pdfs.py     # PDF -> rough text drafts (needs the original PDFs in rulebooks/, kept local)
     uv run python kb/make_mock_v1.py     # mock earlier versions for version handling
     uv run python kb/ingest.py           # build the Qdrant index in .state/qdrant
     uv run python kb/rag.py "Can I use ChatGPT during the programming contest?"

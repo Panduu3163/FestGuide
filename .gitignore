@@ -13,3 +13,7 @@ __pycache__/
 .vscode/
 .DS_Store
 Thumbs.db
+
+# the organizers' original rulebooks stay on this machine only (not published)
+rulebooks/*.pdf
+rulebooks/draft/
