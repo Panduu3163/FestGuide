@@ -46,3 +46,12 @@ CSE Fest 2026 PDFs, used with permission.
 
   Local embeddings (no Gemini embedding quota): set `FESTGUIDE_EMBED_MODEL=fastembed:BAAI/bge-small-en-v1.5`
   and `FESTGUIDE_EMBED_DIM=384`, then run `uv run python -m kb.ingest` once.
+- M7 model layer proof (C2): LangSmith tracing, fallback test, scorecard
+
+    uv run python chat.py --student C233001 --langsmith   # every run is traced in LangSmith (project "festguide")
+    uv run python tests/check_fallback.py                 # wrong Gemini key on purpose: OpenRouter answers instead
+    uv run python scorecard.py                            # 32 questions from data/scorecard.yml, stored as a LangSmith experiment
+    uv run python scorecard.py --local                    # same, printed here only
+
+  Change the model or a prompt, run the scorecard again, and compare the two experiments in LangSmith.
+  Traces contain what students type (private numbers are hidden only after the first step), so use mock data.

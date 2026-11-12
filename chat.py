@@ -3,6 +3,7 @@
     uv run python chat.py --student C233001            # your chat is remembered between runs
     uv run python chat.py --student C233001 --trace    # also show every graph node and tool call
     uv run python chat.py --student C233001 --new      # start a fresh conversation
+    uv run python chat.py --student C233001 --langsmith   # send every run to LangSmith (needs LANGSMITH_API_KEY in .env)
 
 Commands inside the chat:  /status  your requests waiting for an organizer   /history  the saved conversation
                            /new  start a fresh conversation   /quit  leave
@@ -16,6 +17,7 @@ organizer.py). While it waits, a small background watcher checks the saved state
 prints the organizer's decision as soon as it arrives, even if you restarted this program meanwhile.
 """
 import argparse
+import os
 import sys
 import threading
 import time
@@ -75,7 +77,10 @@ def main() -> None:
     ap.add_argument("--student", required=True, help="your student ID, e.g. C233001 (mock data)")
     ap.add_argument("--trace", action="store_true", help="show graph nodes and tool calls")
     ap.add_argument("--new", action="store_true", help="start a fresh conversation")
+    ap.add_argument("--langsmith", action="store_true", help="trace every run in LangSmith")
     args = ap.parse_args()
+    if args.langsmith:                                  # must be set before the first model call
+        os.environ["LANGSMITH_TRACING"] = "true"
 
     student = load_students().get(args.student.upper())
     if student is None:

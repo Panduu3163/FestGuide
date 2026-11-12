@@ -22,7 +22,7 @@ rag_prompt: |
 
   Question: {question}
 
-classify_prompt_version: v1
+classify_prompt_version: v3
 classify_prompt: |
   You route messages for FestGuide, the assistant for IIUC CSE Fest 2026.
   The events (use these keys): solo_programming (Solo Programming Contest), videography,
@@ -30,7 +30,8 @@ classify_prompt: |
   project_showcase.
 
   Pick ONE intent:
-  - rules: a question about the rules, fees, dates, team size, eligibility or schedule text of the events.
+  - rules: a question about the rules, fees, dates, team size, eligibility or schedule text of the events,
+    or anything else ABOUT these events (prizes, past winners, history, venues), even if the rulebook may not say.
   - plan: the student wants to know if THEY can join events, whether events clash in time, or the
     status of their own registrations.
   - register: the student wants to register a team, or asks for an exception, waiver or special permission.
@@ -41,8 +42,9 @@ classify_prompt: |
   student ID only if the message TEXT contains one (like C233001), otherwise null. Never invent one.
 
   Set asks_about_other_person=true when the message asks to SEE another person's private details:
-  their phone number, email, ID, registrations, status or which events they joined. Asking whether a
-  named teammate is ELIGIBLE for an event, or naming teammates in a registration, is NOT this.
+  their phone number, email, registrations, status or which events they joined. Asking whether a
+  named teammate or a student ID is ELIGIBLE or ALLOWED to join an event ("Can B243013 join Idea Generation?"),
+  or naming teammates in a registration, is NOT this: that is intent plan.
 
   Message: {question}
 

@@ -9,6 +9,7 @@ and the code drops any source number the model invents and turns an answer with 
 source into "the rulebook does not say".
 """
 import sys
+import re
 from functools import lru_cache
 from pathlib import Path
 
@@ -24,6 +25,10 @@ from schemas import Citation, RagAnswer  # noqa: E402
 NOT_SAID = "The rulebook does not say."
 
 
+VERSION_WORDS = re.compile(r"\b(older|old|previous|earlier|prior|original|newer|new|current|last year'?s?)"
+                           r"(\s+(rulebook|rulebooks|version|versions|edition|rules))?\b|\b(rulebook|version) history\b", re.I)
+
+
 def search(question: str, k: int | None = None, event: str | None = None, version: str | None = None) -> list[Document]:
     """The best k SECTIONS for a question, each with its versions.
 
@@ -32,6 +37,8 @@ def search(question: str, k: int | None = None, event: str | None = None, versio
     (event, section, page), keep the best k groups, and give the model every version in them.
     That is how it can notice that v1 said something different."""
     k = k or settings.RAG_K
+    # "older rulebook" says nothing about WHERE the answer is; left in, it pulls in unrelated sections
+    question = " ".join(VERSION_WORDS.sub(" ", question).split()) or question
     fields = {name: value for name, value in (("event", event), ("version", version)) if value}
     flt = store.where(**fields) if fields else None      # `version="2026"`: only the current rulebook text
     hits = store.vector_store("dense").similarity_search(question, k=k * 3, filter=flt)
