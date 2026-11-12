@@ -117,8 +117,19 @@ def ensure_collection() -> None:
         )
 
 
+_stores: dict = {}
+
+
 def vector_store(mode: str = "dense") -> QdrantVectorStore:
-    """LangChain's view of the collection. mode: "dense", "keyword" or "hybrid" (writing uses hybrid)."""
+    """LangChain's view of the collection. mode: "dense", "keyword" or "hybrid" (writing uses hybrid).
+    Built once per mode: creating it embeds a dummy text to check the vector size, which costs one
+    embedding request every time (the free tier allows only 1000 a day)."""
+    if mode not in _stores or _stores[mode].client is not _client:
+        _stores[mode] = _make_store(mode)
+    return _stores[mode]
+
+
+def _make_store(mode: str) -> QdrantVectorStore:
     rm = {"dense": RetrievalMode.DENSE, "keyword": RetrievalMode.SPARSE, "hybrid": RetrievalMode.HYBRID}[mode]
     return QdrantVectorStore(
         client=client(), collection_name=settings.collection,

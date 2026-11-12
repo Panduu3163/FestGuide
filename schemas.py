@@ -2,6 +2,7 @@
 
     RagAnswer / Citation   the answer to a rules question (M1)
     Intent                 the classifier's result: where a message goes next (C1)
+    Rewrite                the rewrite node's result: a follow-up made standalone (E2)
     EventRules             what the offline extractor reads out of one rulebook (C1)
 """
 from datetime import date
@@ -49,6 +50,12 @@ class Intent(BaseModel):
     wants_exception: bool = Field(default=False, description="True if the student asks for an exception, waiver or special permission.")
     asks_about_other_person: bool = Field(default=False, description="True if the message asks to see ANOTHER person's private details (phone, email, ID, registrations, status, events joined).")
     reason: str = Field(description="One short sentence: why this intent.")
+
+
+class Rewrite(BaseModel):
+    """The rewrite node's result (E2): the student's message as a question that makes sense on its own."""
+    standalone: str = Field(description="The message rewritten so it needs no chat history. Same meaning, nothing added.")
+    was_follow_up: bool = Field(description="True only if the message relied on earlier turns ('the second one', 'it', 'what about...').")
 
 
 class EventRules(BaseModel):

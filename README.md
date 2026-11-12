@@ -40,3 +40,9 @@ CSE Fest 2026 PDFs, used with permission.
     uv run python organizer.py --watch                  # terminal 2: the organizer (approve with a note, reject with a reason)
     uv run python tests/check_guards.py                 # attacks blocked, normal questions pass
     uv run python tests/check_approval.py               # pause, restart, approve, reject (no model)
+- M6 follow-up rewriting (E2): the `rewrite` node in graph.py, `rewrite_prompt` in prompts.yml
+
+    uv run python tests/check_rewrite.py                # "the second one" becomes a standalone question (about 15 model calls)
+
+  Local embeddings (no Gemini embedding quota): set `FESTGUIDE_EMBED_MODEL=fastembed:BAAI/bge-small-en-v1.5`
+  and `FESTGUIDE_EMBED_DIM=384`, then run `uv run python -m kb.ingest` once.

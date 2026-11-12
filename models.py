@@ -10,6 +10,7 @@ import os
 
 import yaml
 from langchain.chat_models import init_chat_model
+from langchain_core.runnables import RunnableLambda
 from langchain_core.rate_limiters import InMemoryRateLimiter
 
 from config import ROOT, settings
@@ -37,6 +38,14 @@ def make_model(model_id: str):
                            max_tokens=settings.MAX_OUTPUT_TOKENS, rate_limiter=limiter)
 
 
+def _must_parse(result):
+    """with_structured_output returns None when the model's reply cannot be parsed (seen with the OpenRouter
+    model). Raising instead lets the fallback take over, and gives the caller a clear error, not a None."""
+    if result is None:
+        raise ValueError("the model's reply did not match the required structure")
+    return result
+
+
 def build_model(schema=None, tools=None):
     """The assistant's model, with the fallback attached.
 
@@ -46,7 +55,7 @@ def build_model(schema=None, tools=None):
     def prepared(model_id: str):
         m = make_model(model_id)
         if schema is not None:
-            m = m.with_structured_output(schema)
+            m = m.with_structured_output(schema) | RunnableLambda(_must_parse)
         if tools is not None:
             m = m.bind_tools(tools)
         return m

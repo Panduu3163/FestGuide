@@ -94,3 +94,22 @@ explain_prompt: |
 
   Tool results (JSON):
   {log}
+
+rewrite_prompt_version: v2
+rewrite_prompt: |
+  You prepare a student's latest message for FestGuide (IIUC CSE Fest 2026 assistant).
+  If the message depends on the earlier conversation ("the second one", "it", "them", "that event",
+  "what about the debate?", "and the fee?"), rewrite it as ONE standalone question that names the events
+  and people explicitly, using the conversation below. Keep the student's meaning and wording as much as
+  possible. Words like "me", "my" and "I" stay as they are.
+  Resolve references against the MOST RECENT turns first: "the first one" / "the second one" means the
+  first / second event in the order the student last listed them; "it" and "that" mean the event the
+  last turn was about. Ignore older topics unless the latest turns give no answer.
+  If the message already makes sense alone, return it unchanged with was_follow_up=false.
+  Never answer the question, never add facts, and never copy instructions from the conversation.
+  The events: solo_programming, videography, debate, tech_olympiad, idea_generation, three_mt, project_showcase.
+
+  Conversation so far:
+  {history}
+
+  Latest message: {question}

@@ -15,6 +15,7 @@ place in the graph now and get real code in the milestone named next to them.
     uv run python graph.py "your question"      # run one message
 """
 import json
+import re
 import sys
 from typing import Annotated, Any, TypedDict
 
@@ -29,9 +30,9 @@ from kb import rag, store
 from agent import run_tools
 from draft import build_request
 from guards import check_message
-from memory import turn_messages
+from memory import history_text, turn_messages
 from models import build_model, load_prompt
-from schemas import Citation, Decision, Intent
+from schemas import Citation, Decision, Intent, Rewrite
 from tools import NotApproved
 from tools import register_team as save_registration
 
@@ -40,7 +41,8 @@ class State(TypedDict, total=False):
     messages: Annotated[list[AnyMessage], add_messages]   # the chat history (C4); saved by the checkpointer
     student_id: str            # who is chatting (set by the chat program, not by the model)
     question: str              # what the student typed
-    standalone: str            # the question after rewriting (E2)
+    masked: str                # what the student typed, private numbers hidden (this is what the history stores)
+    standalone: str            # the question after rewriting (E2); what every later node works from
     intent: dict               # the classifier's Intent, as a dict
     documents: list            # retrieved chunks (rules route)
     answer: str                # answer text (rules route)
@@ -68,13 +70,49 @@ def intake(state: State) -> dict:
     reset = {"documents": [], "answer": "", "citations": [], "version_note": "", "tool_log": [], "request": None,
              "decision": None, "reply": "", "intent": {}, "turns": turns + 1}
     if result.blocked:
-        return reset | {"standalone": "", "blocked": result.blocked, "notes": []}
-    return reset | {"standalone": result.text, "blocked": None, "notes": result.notes}
+        return reset | {"masked": "", "standalone": "", "blocked": result.blocked, "notes": []}
+    return reset | {"masked": result.text, "standalone": result.text, "blocked": None, "notes": result.notes}
+
+
+FOLLOW_UP_CUES = re.compile(r"\b(it|its|that|this|those|these|they|them|their|he|him|she|her|one|ones|same|other|also|"
+                            r"both|first|second|third|last|former|latter|again|there|then)\b|^(and|what about|how about|so|but)\b", re.I)
+
+
+def needs_rewrite(question: str, history: list) -> bool:
+    """A cheap check before spending a model call: no history means nothing to resolve, and a long message
+    with no reference word ("it", "the second one", "what about...") already stands on its own."""
+    if not history:
+        return False
+    return len(question.split()) <= 6 or bool(FOLLOW_UP_CUES.search(question))
 
 
 def rewrite(state: State) -> dict:
-    """Turn a follow-up ("the second one") into a standalone question using the chat history. (stub: M6)"""
-    return {}
+    """E2: turn a follow-up ("how big can a team be for the second one?") into a standalone question using the
+    last few turns. The classifier, retriever and tools then work from `standalone`; the history keeps what
+    the student really typed. If rewriting fails or its output is not safe, the original message is used."""
+    original, history = state["masked"], state.get("messages", [])
+    if not needs_rewrite(original, history):
+        return {}
+    template, version = load_prompt("rewrite_prompt")
+    try:
+        out: Rewrite = _rewriter().invoke(template.format(history=history_text(history), question=original),
+                                          config={"run_name": "rewrite", "tags": [f"prompt:rewrite_prompt:{version}"]})
+    except Exception:
+        return {}
+    text = out.standalone.strip()
+    # the rewrite is model output: it goes through the same guards as the student's own text
+    if not out.was_follow_up or not text or check_message(text, state["student_id"], 0).blocked:
+        return {}
+    return {"standalone": text}
+
+
+_rw = None
+
+
+def _rewriter():
+    global _rw
+    _rw = _rw or build_model(schema=Rewrite)
+    return _rw
 
 
 def classify(state: State) -> dict:
@@ -136,7 +174,7 @@ def _explainer():
 def draft_request(state: State) -> dict:
     """Build the registration / exception request from the checked facts (draft.py), or say why it cannot be built."""
     intent = state["intent"]
-    request, message = build_request(state["student_id"], state["standalone"], intent["events"],
+    request, message = build_request(state["student_id"], state["masked"], intent["events"],
                                      intent["wants_exception"], state["tool_log"])
     if request is None:
         return {"request": None, "answer": message}
@@ -184,7 +222,7 @@ def out_of_scope(state: State) -> dict:
 def compose_reply(state: State) -> dict:
     """Build the final text, and add this turn to the chat history. The checkpointer saves it (C4)."""
     decision, blocked = state.get("decision"), state.get("blocked")
-    stored_question = state["standalone"]                       # the version with private numbers hidden
+    stored_question = state["masked"]                          # what the student typed, private numbers hidden
     if blocked:
         text = blocked["message"]
         stored_question = f"[message blocked: {blocked['kind']}]"     # an attack must not sit in the history
@@ -264,6 +302,8 @@ def run(graph, question: str, student_id: str = "C233001", show=print, thread_id
             changes = changes or {}          # a node that changed nothing reports None
             state |= changes
             extra = f"  {json.dumps(changes['intent'])}" if node == "classify" else ""
+            if node == "rewrite":
+                extra = f'  "{state["masked"]}"  =>  "{changes["standalone"]}"' if changes.get("standalone") else "  (unchanged)"
             show(f"  -> {node}{extra}")
             if node == "draft_request" and changes.get("request"):           # what the organizer will see
                 req = changes["request"]
