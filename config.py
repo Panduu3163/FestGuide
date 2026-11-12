@@ -24,7 +24,7 @@ class Settings(BaseSettings):
 
     # --- models (course session 4: one string, "provider:model") ---
     MODEL: str = "google_genai:gemini-3.5-flash-lite"
-    FALLBACK: str = "openrouter:openai/gpt-oss-20b"   # used only if its key is set (milestone M7)
+    FALLBACK: str = "openrouter:openai/gpt-oss-120b"  # fallback; used only if OPENROUTER_API_KEY is set (the 20b version often failed to return valid structured output)
     MAX_OUTPUT_TOKENS: int = 2048
     REQUEST_TIMEOUT_S: int = 60
     MAX_RETRIES: int = 2

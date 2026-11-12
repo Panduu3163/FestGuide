@@ -82,7 +82,9 @@ def has(text: str, word: str) -> bool:
 
 def score(expected: dict, out: dict) -> dict[str, int]:
     """1 or 0 for each thing the case asks for. Only the checks a case defines are scored."""
-    text, marks = out["reply"].lower(), {"route": int(out["route"] == expected["route"])}
+    # models sometimes write "10 June" with a no-break space or "3-minute" with a special hyphen: read them as normal characters
+    text = out["reply"].lower().translate({0x202F: " ", 0xA0: " ", 0x2011: "-", 0x2013: "-", 0x2014: "-"})
+    marks = {"route": int(out["route"] == expected["route"])}
     if expected.get("contains"):
         marks["contains"] = int(all(has(text, w) for w in expected["contains"]))
     if expected.get("forbid"):

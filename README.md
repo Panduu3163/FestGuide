@@ -8,8 +8,22 @@ All student and registration data is **mock** (synthetic). Rulebooks are the rea
 CSE Fest 2026 PDFs, used with permission.
 
     uv sync
-    Copy-Item .env.example .env      # keys are needed from milestone M2 on
+    Copy-Item .env.example .env      # then paste your keys into .env (it is git-ignored)
     uv run python fest_data.py       # create the mock database and print a summary
+    uv run python -m kb.ingest       # build the rulebook index (156 chunks, embedded Qdrant in .state/)
+
+Keys in `.env`: `GEMINI_API_KEY` (chat + embeddings), `OPENROUTER_API_KEY` (fallback model), `LANGSMITH_API_KEY`
+(tracing + scorecard). Without the Gemini embedding quota, set `FESTGUIDE_EMBED_MODEL=fastembed:BAAI/bge-small-en-v1.5`
+and `FESTGUIDE_EMBED_DIM=384` and run the ingest again (local, no key).
+
+Run it:
+
+    uv run python chat.py --student C233001        # the student terminal (try --trace and --langsmith)
+    uv run python organizer.py --watch             # the organizer terminal
+    uv run python demo.py                          # all seven demo moments in one scripted run
+    uv run python scorecard.py                     # 32-question scorecard, stored in LangSmith
+
+The live demo script is in `docs/demo.md`; a recorded backup run is in `docs/backup_run.txt`.
 
 ## Milestones
 
@@ -62,3 +76,8 @@ CSE Fest 2026 PDFs, used with permission.
   Measured with the local embedder (26 questions): the event filter raised hit@1 from 4 to 8 of 10 on questions
   that do not name the event; hybrid (BM25 + dense) added nothing and lost some. So `EVENT_FILTER=true` is the
   default and `RETRIEVAL_MODE` stays "dense" (`FESTGUIDE_RETRIEVAL_MODE=hybrid` to try it).
+- M9 the demo: demo.py (scripted run of all seven moments), docs/demo.md (live script), docs/backup_run.txt (recording)
+
+    uv run python demo.py --step --out docs/backup_run.txt
+
+  The fallback model is now gpt-oss-120b: the 20b version returned unusable structured output about half the time.
