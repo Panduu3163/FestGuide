@@ -101,3 +101,12 @@ The live demo script is in `docs/demo.md`; a recorded backup run is in `docs/bac
   For a public site: per-visitor chats and inboxes, rate limits (30 messages per hour per visitor, 300 a day), registrations
   reset to the seed teams every 30 minutes and on "Reset demo". The host must be a container host (Render, Fly, Railway), not
   Vercel: the pause-and-approve flow needs a disk that persists between requests. See `docs/deploy.md`.
+- M13 a nicer web UI: source cards, tone badges, approval ticket, timeline of graph steps, motion (static/ui.js, static/style.css)
+
+  The reply text is turned into data by `web.shape()` (the graph is unchanged): each `[cite]` line becomes a source card
+  (event, section, page, "2026 rulebook" or "mock earlier version"); known reply shapes get a badge (stopped by a guardrail,
+  not in the rulebook, sent to an organizer, approved, not approved) and an approval becomes a ticket with the REG number.
+  The "how FestGuide got this" panel is the graph trace drawn as a timeline. The organizer page has request cards with
+  avatars and eligibility icons, an exit animation and toast on a decision, a "decided this visit" list, and a live
+  indicator. Light and dark mode, phone width, and all motion off for visitors who ask for reduced motion.
+  Tested with `tests/check_web.py` (32 offline checks plus the live round trip) and by eye in a browser.

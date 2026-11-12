@@ -7,106 +7,150 @@
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-<header>
-  <h1>FestGuide · Organizer</h1>
-  <span class="badge" id="count">0 waiting</span>
+<header class="top">
+  <div class="brand"><span id="logo"></span> FestGuide <span class="chip">Organizer console</span></div>
+  <span class="live"><i></i> Live</span>
+  <span class="chip count" id="count">0 waiting</span>
   <span class="sp"></span>
-  <input id="pin" type="password" placeholder="PIN (if set)" style="width:120px" autocomplete="off">
-  <a href="/" target="_blank">Student page ↗</a>
+  <input id="pin" type="password" placeholder="PIN (if set)" style="width:120px" autocomplete="off" aria-label="Organizer PIN">
+  <a href="/" target="_blank" id="studentlink">Student page ↗</a>
 </header>
-<main>
-  <div id="inbox"></div>
+
+<main class="wrap org" style="padding-bottom:60px">
+  <div class="inbox" id="inbox"></div>
+  <div id="doneBox" hidden><h3 class="sect">Decided this visit</h3><div id="done"></div></div>
 </main>
+<div class="toast" id="toast" role="status"></div>
+
+<script src="/static/ui.js"></script>
 <script>
 const $ = (id) => document.getElementById(id);
 const inbox = $("inbox");
-let busy = false;          // do not redraw while the organizer is typing a note
+let busy = false;              // true while the organizer types or a card is leaving: do not redraw underneath them
+let shown = null;              // which requests are on screen; redraw only when this changes
+let lastCount = 0;
+const decided = [];            // kept in this page only (this visit), not stored on the server
 
-function headers() {
-  const h = { "Content-Type": "application/json" };
-  if ($("pin").value) h["X-Pin"] = $("pin").value;
-  return h;
+$("logo").append(logoMark());
+if (window.self !== window.top) { document.body.classList.add("framed"); $("studentlink").hidden = true; }
+
+const headers = () => ({ "Content-Type": "application/json", ...($("pin").value ? { "X-Pin": $("pin").value } : {}) });
+const call = (path, opts = {}) => api(path, { ...opts, headers: headers() });
+
+function toast(msg, ic = "check") {
+  const t = $("toast"); t.textContent = ""; t.append(icon(ic), document.createTextNode(msg));
+  t.classList.add("show"); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove("show"), 3200);
 }
 
-async function api(path, opts = {}) {
-  const r = await fetch(path, { ...opts, headers: headers() });
-  const body = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(body.detail || r.statusText);
-  return body;
+function ago(iso) {
+  if (!iso) return "";
+  const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
+  return s < 60 ? "just now" : s < 3600 ? `${Math.floor(s / 60)} min ago` : `${Math.floor(s / 3600)} h ago`;
 }
 
-function el(tag, cls, content) {
-  const e = document.createElement(tag);
-  if (cls) e.className = cls;
-  if (content !== undefined) e.textContent = content;
-  return e;
+function person(name, id, lead) {
+  const p = el("span", "person" + (lead ? " lead" : ""));
+  p.append(el("span", "avatar", initials(name)), el("span", "", name), el("small", "", lead ? "leader" : id));
+  return p;
 }
 
 function card(p) {
   const req = p.request;
-  const c = el("div", "card");
-  c.append(el("h2", "", `${req.kind.toUpperCase()} request · ${req.event_name}`));
-  c.append(el("div", "meta", `Leader ${p.leader_name} (${req.leader_id})` +
-    (req.member_ids.length ? ` · members ${p.member_names.map((n, i) => `${n} (${req.member_ids[i]})`).join(", ")}` : "")));
-  c.append(el("div", "meta", req.fee_note));
-  req.checks.forEach((k) => {
-    const row = el("div", "check", k.student);
-    const [cls, label] = k.eligible === true ? ["ok", "eligible"] : k.eligible === false ? ["bad", "NOT eligible"] : ["warn", "unclear"];
-    row.append(el("span", "pill " + cls, label));
-    c.append(row);
-    k.problems.forEach((x) => c.append(el("div", "problem", "Problem: " + x)));
-    k.unclear.forEach((x) => c.append(el("div", "unclear", "Unclear: " + x)));
-  });
-  req.cited_rules.forEach((r) => {
-    const d = el("div", "rule");
-    d.append(el("strong", "", `[${r.source}] `), document.createTextNode(r.text.slice(0, 300)));
-    c.append(d);
-  });
-  c.append(el("div", "said", `Student wrote: "${req.student_message}"`));
+  const c = el("article", "req");
+  const head = el("div", "head");
+  head.append(el("h2", "", `${req.kind === "exception" ? "Exception" : "Registration"} request · ${req.event_name}`));
+  head.append(el("span", "pill " + (req.kind === "exception" ? "warn" : "info"), req.kind));
+  head.append(el("span", "sub", "asked " + ago(p.asked_at)));
+  c.append(head);
 
-  const note = el("input"); note.placeholder = "Note for the student (a reason is required to reject)";
+  const team = el("div", "team");
+  team.append(person(p.leader_name, req.leader_id, true));
+  req.member_ids.forEach((m, i) => team.append(person(p.member_names[i], m, false)));
+  c.append(team);
+  const fee = el("p", "fee"); fee.append(icon("coin"), document.createTextNode(req.fee_note)); c.append(fee);
+
+  const checks = el("div", "checks");
+  req.checks.forEach((k) => {
+    const [cls, ic] = k.eligible === true ? ["ok", "check"] : k.eligible === false ? ["bad", "x"] : ["warn", "help"];
+    const row = el("div", "check"); const st = el("span", "st " + cls); st.append(icon(ic));
+    const label = el("div"); label.append(el("b", "", k.student), document.createTextNode(" "),
+      el("span", "pill " + cls, k.eligible === true ? "eligible" : k.eligible === false ? "not eligible" : "unclear"));
+    row.append(st, label);
+    k.problems.forEach((x) => row.append(el("div", "prob bad", x)));
+    k.unclear.forEach((x) => row.append(el("div", "prob warn", x)));
+    checks.append(row);
+  });
+  c.append(checks);
+
+  req.cited_rules.forEach((r) => {
+    const q = el("div", "quote"); q.append(el("b", "", r.source), document.createTextNode(r.text.slice(0, 280) + (r.text.length > 280 ? "…" : "")));
+    c.append(q);
+  });
+  const said = el("div", "said"); said.append(el("small", "", "Student wrote"), document.createTextNode(`“${req.student_message}”`)); c.append(said);
+
+  const note = el("input"); note.placeholder = "Note for the student (a reason is required to reject)"; note.setAttribute("aria-label", "Note");
   note.addEventListener("focus", () => (busy = true));
-  note.addEventListener("blur", () => (busy = false));
-  const err = el("span", "err");
+  note.addEventListener("blur", () => { if (!c.classList.contains("leaving")) busy = false; });
+  const err = el("div", "err");
+  const ok = el("button", "btn ok", "Approve"); ok.prepend(icon("check"));
+  const no = el("button", "btn bad", "Reject"); no.prepend(icon("x"));
   const decide = (status) => async () => {
-    err.textContent = "";
+    err.textContent = ""; ok.disabled = no.disabled = true;
     try {
-      await api("/api/organizer/decide", { method: "POST", body: JSON.stringify({ thread_id: p.thread_id, status, note: note.value }) });
-      busy = false;
-      refresh();
-    } catch (e) { err.textContent = e.message; }
+      await call("/api/organizer/decide", { method: "POST", body: JSON.stringify({ thread_id: p.thread_id, status, note: note.value }) });
+      decided.unshift({ event: req.event_name, who: p.leader_name, status, note: note.value });
+      busy = true; c.classList.add("leaving");
+      toast(status === "approved" ? "Approved. The student's page updates by itself." : "Rejected. The student sees your reason.", status === "approved" ? "check" : "x");
+      setTimeout(() => { busy = false; shown = null; renderDone(); refresh(); }, 600);
+    } catch (e) {
+      ok.disabled = no.disabled = false; err.textContent = e.message;
+      c.classList.remove("shake"); void c.offsetWidth; c.classList.add("shake");          // restart the shake
+    }
   };
-  const ok = el("button", "ok", "Approve"); ok.onclick = decide("approved");
-  const no = el("button", "bad", "Reject"); no.onclick = decide("rejected");
-  const row = el("div", "actions"); row.append(note, ok, no);
-  c.append(row, err);
+  ok.onclick = decide("approved"); no.onclick = decide("rejected");
+  const row = el("div", "actions"); row.append(note, ok, no, err);
+  c.append(row);
   return c;
 }
 
-let shown = null;          // which requests are on screen; redraw only when this changes, so typing and clicks are never interrupted
+function renderDone() {
+  $("doneBox").hidden = !decided.length;
+  $("done").textContent = "";
+  decided.forEach((d) => {
+    const r = el("div", "done"); r.append(icon(d.status === "approved" ? "check" : "x"));
+    r.append(el("span", "", `${d.who} · ${d.event}` + (d.note ? ` · “${d.note}”` : "")));
+    r.append(el("span", "pill " + (d.status === "approved" ? "ok" : "bad"), d.status));
+    $("done").append(r);
+  });
+}
+
+function emptyState() {
+  const e = el("div", "empty");
+  e.append(icon("inbox"), el("h3", "", "All caught up"), el("div", "", "No requests are waiting. New ones appear here by themselves."));
+  return e;
+}
 
 async function refresh() {
   if (busy) return;
   try {
-    const items = await api("/api/organizer/pending");
-    const now = items.map((p) => p.thread_id).join("|");
+    const items = await call("/api/organizer/pending");
     $("count").textContent = `${items.length} waiting`;
+    if (items.length !== lastCount) { $("count").classList.remove("bump"); void $("count").offsetWidth; $("count").classList.add("bump"); lastCount = items.length; }
+    const now = items.map((p) => p.thread_id).join("|");
     if (now === shown) return;
     shown = now;
     inbox.textContent = "";
-    if (!items.length) inbox.append(el("div", "empty", "No requests are waiting. New ones appear here by themselves."));
+    if (!items.length) inbox.append(emptyState());
     items.forEach((p) => inbox.append(card(p)));
   } catch (e) {
-    shown = null;
-    inbox.textContent = "";
-    inbox.append(el("div", "empty", e.message));
+    shown = null; inbox.textContent = ""; inbox.append(el("div", "empty", e.message));
   }
 }
 
 fetch("/api/config").then((r) => r.json()).then((c) => { if (c.demo) $("pin").hidden = true; }).catch(() => {});
 refresh();
 setInterval(refresh, 3000);
-$("pin").addEventListener("change", refresh);
+$("pin").addEventListener("change", () => { shown = null; refresh(); });
 </script>
 </body>
 </html>

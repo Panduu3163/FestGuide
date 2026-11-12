@@ -138,6 +138,43 @@ def limit(request: Request) -> None:
     day_count["n"] += 1
 
 
+CITE_LINE = re.compile(r"^\s*\[cite\] (.+)$")
+CITE_LABEL = re.compile(r"^(?P<event>.+?), (?P<section>.+?)(?:, p\.(?P<page>\d+))? \[(?P<version>[^\]]+)\]$")
+
+
+def shape(text: str) -> dict:
+    """Split a reply into what the page draws: the text, citation cards, a version note, a tone, a ticket.
+
+    The graph writes citations as '  [cite] Event, Section, p.3 [2026]' lines (built from chunk metadata by code,
+    never by the model), so reading them back is exact. Doing it here, for live replies and for the saved history
+    alike, keeps the page simple and means the graph does not change for the web version."""
+    body, cites, version_note = [], [], ""
+    for line in text.splitlines():
+        if m := CITE_LINE.match(line):
+            lab = CITE_LABEL.match(m.group(1))
+            cites.append({"event": lab["event"], "section": lab["section"], "page": int(lab["page"]) if lab["page"] else None,
+                          "version": lab["version"]} if lab else {"event": m.group(1), "section": "", "page": None, "version": ""})
+        elif line.startswith("(Version note:"):
+            version_note = line.removeprefix("(Version note: ").removesuffix(")")
+        else:
+            body.append(line)
+    clean = "\n".join(body).strip()
+    low = clean.lower()
+    tone = ("approved" if "approved! your team" in low else
+            "rejected" if "was not approved by the organizer" in low else
+            "paused" if "sent it to a fest organizer for approval" in low else
+            "blocked" if low.startswith(("i can't follow instructions", "please keep the chat respectful", "i can't share another")) else
+            "not_found" if "rulebook does not say" in low and not cites else
+            "out_of_scope" if "i can only help with the iiuc" in low else
+            "answer")
+    out = {"text": clean, "cites": cites, "version_note": version_note, "tone": tone}
+    if tone == "approved":
+        ref, event, note = (re.search(r"Reference: (REG-\d+)", clean), re.search(r"team for (.+?) is registered", clean),
+                            re.search(r"Organizer's note: (.+)$", clean))
+        out["ticket"] = {"ref": ref and ref[1], "event": event and event[1], "note": note and note[1]}
+    return out
+
+
 class ChatIn(BaseModel):
     student_id: str
     message: str = Field(min_length=1, max_length=1000)
@@ -173,15 +210,17 @@ def chat(body: ChatIn, request: Request, ses: str = Depends(session)) -> dict:
         raise HTTPException(409, "Still working on your previous message.")
     try:
         if is_waiting(graph, thread):                   # a new message would discard the paused request
-            return {"reply": "Your request is waiting for an organizer's decision. You will see the result here.",
-                    "trace": [], "waiting": True}
+            text = "Your request is waiting for an organizer's decision. You will see the result here."
+            return {"reply": text, "message": shape(text), "trace": [], "tools": [], "waiting": True}
         limit(request)                                  # only a message that would really run counts
         trace: list[str] = []
         try:
             state = run(graph, body.message, sid, show=trace.append, thread_id=thread)
         except Exception as err:                        # a rate limit or outage must not break the page
-            return {"reply": friendly_error(err), "trace": trace, "waiting": False}
-        return {"reply": state["reply"], "trace": trace, "waiting": bool(state.get("interrupted"))}
+            text = friendly_error(err)
+            return {"reply": text, "message": shape(text) | {"tone": "error"}, "trace": trace, "tools": [], "waiting": False}
+        return {"reply": state["reply"], "message": shape(state["reply"]), "trace": trace,
+                "tools": [c["tool"] for c in state.get("tool_log") or []], "waiting": bool(state.get("interrupted"))}
     finally:
         lock.release()
 
@@ -194,8 +233,9 @@ def conversation(student_id: str, ses: str = Depends(session)) -> dict:
     thread = thread_of(sid, ses)
     messages = graph.get_state({"configurable": {"thread_id": thread}}).values.get("messages", [])
     waiting = is_waiting(graph, thread)
-    return {"messages": [{"role": "student" if m.type == "human" else "festguide", "text": m.content} for m in messages],
-            "waiting": waiting, "last_reply": "" if waiting else last_reply(graph, thread)}
+    return {"messages": [{"role": "student", "text": m.content} if m.type == "human" else {"role": "festguide", **shape(m.content)}
+                         for m in messages],
+            "waiting": waiting, "last": None if waiting else shape(last_reply(graph, thread)), "last_reply": "" if waiting else last_reply(graph, thread)}
 
 
 # ---------------------------------------------------------------- organizer side

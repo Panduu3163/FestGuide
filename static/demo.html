@@ -4,27 +4,23 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>FestGuide - Live Demo</title>
+<meta name="description" content="FestGuide answers CSE Fest 2026 rulebook questions with sources and sends registrations to an organizer for approval.">
 <link rel="stylesheet" href="/static/style.css">
-<style>
-  body { height: 100vh; display: flex; flex-direction: column; }
-  .intro { padding: 10px 16px; font-size: 14px; color: var(--muted); border-bottom: 1px solid var(--line); background: var(--card); }
-  .intro b { color: var(--ink); }
-  .panes { flex: 1; display: grid; grid-template-columns: 1fr 1fr; min-height: 0; }
-  .pane { display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--line); }
-  .pane h2 { margin: 0; padding: 8px 16px; font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); background: var(--card); border-bottom: 1px solid var(--line); }
-  iframe { flex: 1; width: 100%; border: 0; min-height: 0; background: var(--bg); }
-  @media (max-width: 800px) { .panes { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; } }
-</style>
 </head>
-<body>
+<body class="demo">
 <div class="intro">
-  <b>FestGuide</b> answers questions about the IIUC CSE Fest 2026 rulebooks with citations, checks eligibility and clashes, and sends registrations to an organizer.
-  Try it: in the left pane press <b>Register me and Rafi for Idea Generation</b>, then approve it in the right pane and watch the left pane update.
-  All students and registrations are invented.
+  <h1><span>FestGuide</span> · live demo</h1>
+  <p>An assistant for the IIUC CSE Fest 2026 rulebooks. It answers with sources, says so when the rulebook is silent, checks eligibility and schedule clashes, and sends registrations to an organizer, who approves or rejects them. Everything here is invented data.</p>
+  <div class="steps">
+    <span class="s" style="--n:0"><em>1</em> Ask a rules question</span><span class="arrow">→</span>
+    <span class="s" style="--n:1"><em>2</em> Register a team</span><span class="arrow">→</span>
+    <span class="s" style="--n:2"><em>3</em> Approve it on the right</span><span class="arrow">→</span>
+    <span class="s" style="--n:3"><em>4</em> Watch the left page update</span>
+  </div>
 </div>
 <div class="panes">
-  <section class="pane"><h2>Student</h2><iframe src="/" title="Student"></iframe></section>
-  <section class="pane"><h2>Organizer</h2><iframe src="/organizer" title="Organizer"></iframe></section>
+  <section class="win"><div class="bar"><i></i><i></i><i></i><span>Student</span></div><iframe src="/" title="Student chat"></iframe></section>
+  <section class="win"><div class="bar"><i></i><i></i><i></i><span>Organizer</span></div><iframe src="/organizer" title="Organizer console"></iframe></section>
 </div>
 </body>
 </html>

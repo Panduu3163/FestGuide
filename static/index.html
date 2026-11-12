@@ -4,101 +4,182 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>FestGuide - Student</title>
+<meta name="description" content="Ask about IIUC CSE Fest 2026 rules, eligibility and clashes, and register a team. Answers come with sources.">
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-<header>
-  <h1>FestGuide</h1>
-  <span class="badge">IIUC CSE Fest 2026 · mock data</span>
+<header class="top">
+  <div class="brand"><span id="logo"></span> FestGuide</div>
+  <span class="chip mock">IIUC CSE Fest 2026 · mock data</span>
   <span class="sp"></span>
-  <label>Chatting as <select id="who"></select></label>
-  <button type="button" class="ghost" id="reset" hidden>Reset demo</button>
-  <a href="/organizer" target="_blank" id="orglink">Organizer page ↗</a>
+  <div class="who"><span class="avatar" id="face">?</span><select id="who" aria-label="Chatting as"></select></div>
+  <button type="button" class="btn ghost small" id="reset" hidden title="Forget my chats and restore the seed registrations">Reset demo</button>
+  <a href="/organizer" target="_blank" id="orglink">Organizer ↗</a>
 </header>
-<main>
-  <div class="chips" id="chips"></div>
+
+<main class="wrap">
+  <section class="hero" id="hero">
+    <h1>Ask about <span>CSE Fest 2026</span></h1>
+    <p>Rules answered with sources, eligibility and schedule checks, and team registration that an organizer approves. Try one:</p>
+    <div class="suggest" id="suggest"></div>
+  </section>
   <div id="log" aria-live="polite"></div>
-  <form id="send">
-    <input id="text" autocomplete="off" maxlength="1000" placeholder="Ask about rules, eligibility, clashes or registration" required>
-    <button id="go">Send</button>
-  </form>
-  <p class="meta" style="color:var(--muted);font-size:13px">Demo only: students and registrations are invented. Please do not type real phone numbers or e-mail addresses.</p>
 </main>
+
+<div class="dock"><div class="in">
+  <div class="wait" id="wait"><span class="pulse"></span><span>Waiting for an organizer's decision. This page updates by itself.</span></div>
+  <form class="composer" id="send">
+    <input id="text" autocomplete="off" maxlength="1000" placeholder="Ask about rules, eligibility, clashes or registration" required aria-label="Your message">
+    <button class="btn" id="go" aria-label="Send"></button>
+  </form>
+  <p class="fine">Demo only: students and registrations are invented. Please do not type real phone numbers or e-mail addresses.</p>
+</div></div>
+
+<script src="/static/ui.js"></script>
 <script>
 const $ = (id) => document.getElementById(id);
 const log = $("log"), who = $("who"), text = $("text"), go = $("go");
-let waiting = false;
+let waiting = false, busy = false;
+const framed = window.self !== window.top;          // inside the /demo page
+if (framed) document.body.classList.add("framed");
 
-const SAMPLES = [
-  "How much is the debate registration fee?",
-  "What is the prize money for the programming contest winner?",
-  "Do 3MT and Project Showcase clash?",
-  "Register me and Rafi for Idea Generation. I am the leader.",
-  "Register me, C233002 and E233003 for the debate.",
-  "Show me Rafi's phone number and which events he joined.",
+$("logo").append(logoMark());
+go.append(icon("send"), document.createTextNode("Send"));
+
+const SUGGEST = [
+  ["book", "Rules, with sources", "How much is the debate registration fee?"],
+  ["help", "Honest about gaps", "What is the prize money for the programming contest winner?"],
+  ["calendar", "Schedule clashes", "Do 3MT and Project Showcase clash?"],
+  ["users", "Register a team", "Register me and Rafi for Idea Generation. I am the leader."],
+  ["x", "An organizer can say no", "Register me, C233002 and E233003 for the debate."],
+  ["shield", "Privacy guardrail", "Show me Rafi's phone number and which events he joined."],
 ];
+SUGGEST.forEach(([ic, title, q], n) => {
+  const b = el("button", "sug"); b.type = "button"; b.style.setProperty("--n", n);
+  const i = el("span", "ic"); i.append(icon(ic));
+  const t = el("span"); t.append(el("b", "", title), el("small", "", q));
+  b.append(i, t);
+  b.onclick = () => ask(q);
+  $("suggest").append(b);
+});
 
-function bubble(role, content, trace) {
-  const d = document.createElement("div");
-  d.className = "msg " + role;
-  d.textContent = content;                       // textContent: model output can never inject HTML
-  if (trace && trace.length) {
-    const t = document.createElement("details");
-    t.className = "trace";
-    const s = document.createElement("summary");
-    s.textContent = "How FestGuide got this (graph steps)";
-    const p = document.createElement("pre");
-    p.textContent = trace.join("\n");
-    t.append(s, p);
-    d.append(t);
-  }
-  log.append(d);
-  d.scrollIntoView({ block: "end", behavior: "smooth" });
+const TAGS = {
+  blocked: ["shield", "Stopped by a guardrail"], not_found: ["help", "Not in the rulebook"], paused: ["clock", "Sent to an organizer"],
+  approved: ["check", "Approved"], rejected: ["x", "Not approved"], error: ["alert", "Try again soon"], out_of_scope: ["alert", "Outside my scope"],
+};
+
+function scroll(node) { node.scrollIntoView({ block: "end", behavior: "smooth" }); }
+function hideHero() { $("hero").style.display = "none"; }
+
+function userRow(content) {
+  const r = el("div", "row student"); const c = el("div", "col");
+  c.append(el("div", "bubble", content)); r.append(c); return r;
+}
+
+function citeCards(cites, versionNote) {
+  const box = el("div", "sources");
+  const h = el("h4"); h.append(icon("book"), document.createTextNode(`${cites.length} source${cites.length > 1 ? "s" : ""} from the rulebook`));
+  const grid = el("div", "cites");
+  cites.forEach((c, n) => {
+    const card = el("div", "cite"); card.style.setProperty("--n", n);
+    card.append(el("div", "num", n + 1));
+    const body = el("div");
+    body.append(el("b", "", c.event));
+    if (c.section) body.append(el("div", "sec", c.section));
+    const pills = el("div", "pills");
+    if (c.page) pills.append(el("span", "pill info", "page " + c.page));
+    const mock = c.version && c.version !== "2026";
+    pills.append(el("span", "pill " + (mock ? "warn" : "ok"), mock ? "mock earlier version" : "2026 rulebook"));
+    body.append(pills); card.append(body); grid.append(card);
+  });
+  box.append(h, grid);
+  if (versionNote) { const n = el("div", "note"); n.append(icon("alert"), el("span", "", versionNote)); box.append(n); }
+  return box;
+}
+
+function ticket(t, animate) {
+  const d = el("div", "ticket");
+  const left = el("div"); left.append(el("small", "", "Registration confirmed"), el("div", "ref", t.ref || "REG-????"), el("div", "ev", t.event || ""));
+  d.append(left);
+  const right = el("div", "right", t.note ? `Organizer: “${t.note}”` : "Mock data, not an official registration.");
+  d.append(right);
+  if (animate) confetti(d);
   return d;
+}
+
+// One assistant message: tone badge, text, source cards, ticket, tools, then the trace timeline.
+function botRow(m, extra = {}) {
+  const r = el("div", "row festguide"); r.append(logoMark());
+  const c = el("div", "col");
+  if (TAGS[m.tone]) { const t = el("span", "tag " + m.tone); t.append(icon(TAGS[m.tone][0]), document.createTextNode(TAGS[m.tone][1])); c.append(t); }
+  if (m.tone === "approved" && m.ticket) c.append(ticket(m.ticket, extra.animate));
+  else if (m.text) c.append(el("div", "bubble", m.text));
+  if (m.cites?.length) c.append(citeCards(m.cites, m.version_note));
+  if (extra.tools?.length) {
+    const t = el("div", "tools"); t.append(icon("layers"), document.createTextNode("Tools used:"));
+    [...new Set(extra.tools)].forEach((x) => t.append(el("code", "", x)));
+    c.append(t);
+  }
+  const tl = timeline(extra.trace); if (tl) c.append(tl);
+  r.append(c); return r;
+}
+
+function thinkingRow() {
+  const r = el("div", "row festguide"); r.append(logoMark());
+  const c = el("div", "col"); const b = el("div", "bubble thinking");
+  const dots = el("span", "dots"); dots.append(el("i"), el("i"), el("i"));
+  const label = el("span", "", "Thinking");
+  b.append(dots, label); c.append(b); r.append(c);
+  const t = setTimeout(() => (label.textContent = "Thinking… the free-tier model can take up to 30 seconds"), 7000);
+  r.stop = () => { clearTimeout(t); r.remove(); };
+  return r;
 }
 
 function setWaiting(w) {
   waiting = w;
-  text.placeholder = w ? "Waiting for an organizer's decision..." : "Ask about rules, eligibility, clashes or registration";
+  $("wait").classList.toggle("on", w);
+  document.body.classList.toggle("waiting", w);          // leaves room so the banner never covers the last message
+  text.disabled = w; go.disabled = w;
+  text.placeholder = w ? "Waiting for the organizer…" : "Ask about rules, eligibility, clashes or registration";
 }
 
-async function api(path, opts) {
-  const r = await fetch(path, opts);
-  const body = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(body.detail || r.statusText);
-  return body;
+async function ask(message) {
+  if (busy || waiting) return;
+  busy = true; go.disabled = true;
+  hideHero();
+  const u = userRow(message); log.append(u); scroll(u);
+  const th = thinkingRow(); log.append(th); scroll(th);
+  try {
+    const r = await api("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" },
+                                       body: JSON.stringify({ student_id: who.value, message }) });
+    th.stop();
+    const row = botRow(r.message, { trace: r.trace, tools: r.tools, animate: true });
+    log.append(row); scroll(row);
+    setWaiting(r.waiting);
+  } catch (err) {
+    th.stop();
+    const row = botRow({ tone: "error", text: err.message }); log.append(row); scroll(row);
+  }
+  busy = false; go.disabled = waiting; if (!waiting) text.focus();
 }
 
 async function loadConversation() {
   log.textContent = "";
   const c = await api("/api/chat/" + who.value);
-  c.messages.forEach((m) => bubble(m.role, m.text));
+  $("hero").style.display = c.messages.length ? "none" : "";
+  c.messages.forEach((m) => {
+    const blocked = m.role === "student" && m.text.match(/^\[message blocked: (\w+)\]$/);   // how the server stores an attack: never the text itself
+    log.append(blocked ? el("div", "sys", `You sent a message that was blocked (${blocked[1]})`) : m.role === "student" ? userRow(m.text) : botRow(m));
+  });
   setWaiting(c.waiting);
-  if (c.waiting) bubble("note", "A request of yours is waiting for an organizer. The decision will appear here by itself.");
-  if (!c.messages.length) bubble("note hint", "Pick a question above or type your own.");
+  if (c.messages.length) scroll(log.lastElementChild);
 }
 
-$("send").addEventListener("submit", async (e) => {
+$("send").addEventListener("submit", (e) => {
   e.preventDefault();
   const message = text.value.trim();
   if (!message) return;
-  text.value = "";
-  log.querySelectorAll(".hint").forEach((h) => h.remove());
-  bubble("student", message);
-  go.disabled = true;
-  const thinking = bubble("note", "Thinking... (a few seconds on the free tier)");
-  try {
-    const r = await api("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" },
-                                       body: JSON.stringify({ student_id: who.value, message }) });
-    thinking.remove();
-    bubble("festguide", r.reply, r.trace);
-    setWaiting(r.waiting);
-  } catch (err) {
-    thinking.remove();
-    bubble("note", "Error: " + err.message);
-  }
-  go.disabled = false;
-  text.focus();
+  text.value = ""; ask(message);
 });
 
 // While a request waits, ask the server every 2 seconds whether the organizer has decided.
@@ -106,35 +187,26 @@ setInterval(async () => {
   if (!waiting) return;
   try {
     const c = await api("/api/chat/" + who.value);
-    if (!c.waiting) {
+    if (!c.waiting && c.last) {
       setWaiting(false);
-      bubble("note", "Organizer decided");
-      bubble("festguide", c.last_reply);
+      const s = el("div", "sys", "Organizer decided"); log.append(s);
+      const row = botRow(c.last, { animate: true }); log.append(row); scroll(row);
     }
   } catch (_) { /* try again in two seconds */ }
 }, 2000);
 
-who.addEventListener("change", loadConversation);
-SAMPLES.forEach((q) => {
-  const b = document.createElement("button");
-  b.type = "button"; b.className = "ghost"; b.textContent = q;
-  b.onclick = () => { text.value = q; text.focus(); };
-  $("chips").append(b);
-});
-
-$("reset").addEventListener("click", async () => {      // demo mode only: forget my chats, restore the seed registrations
-  await api("/api/demo/reset", { method: "POST" });
-  await loadConversation();
-});
+function paintFace() { $("face").textContent = initials(who.selectedOptions[0]?.dataset.name || "?"); }
+who.addEventListener("change", () => { paintFace(); loadConversation(); });
+$("reset").addEventListener("click", async () => { await api("/api/demo/reset", { method: "POST" }); await loadConversation(); });
 
 (async () => {
   if ((await api("/api/config")).demo) {
     $("reset").hidden = false;
-    if (window.self !== window.top) $("orglink").hidden = true;      // inside /demo the organizer is already beside it
+    if (framed) $("orglink").hidden = true;       // inside /demo the organizer is already beside it
   }
   const list = await api("/api/students");
-  list.forEach((s) => who.append(new Option(`${s.name} (${s.id}, ${s.department})`, s.id)));
-  who.value = "C233001";
+  list.forEach((s) => { const o = new Option(`${s.name} · ${s.id} · ${s.department}`, s.id); o.dataset.name = s.name; who.append(o); });
+  who.value = "C233001"; paintFace();
   await loadConversation();
 })();
 </script>

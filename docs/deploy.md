@@ -4,8 +4,10 @@
 
 | Host | Works? | Why |
 |---|---|---|
-| **Render** (free Docker web service) | yes, recommended | one long-running container, a normal disk, no short time limit. `render.yaml` is ready |
-| Fly.io, Railway, any VPS | yes | same `Dockerfile` |
+| **Render** (free Docker web service) | yes | one long-running container, a normal disk, no short time limit. `render.yaml` is ready. **Checked: Render asks for a credit card to verify identity, even for the free plan** (a temporary $1 authorization). The free plan has 512 MB; the app measured about 225 MB resident after real questions |
+| Hugging Face Spaces (Docker) | only with a paid PRO plan | **Checked: free accounts can create Static Spaces only.** `deploy/hf_push.sh` is ready if you subscribe: it pushes a clean one-commit snapshot without the large PDFs (HF refuses files over 10 MB) |
+| Fly.io, Railway, any VPS | yes | same `Dockerfile`; they ask for a card too |
+| Your own PC + a tunnel (Cloudflare Tunnel, ngrok) | yes, free | live only while the PC is on; run `DEMO_MODE=1 uv run python web.py` and tunnel port 8000 |
 | **Vercel** | **no, not for this backend** | functions are short-lived, the disk is read-only apart from a temporary `/tmp` that is not shared between runs, and one reply can take up to 30 seconds. A request that pauses for the organizer would be lost, and the vector index and embedding library are too big for a function |
 
 A static front end on Vercel with the API on Render is possible, but it needs cross-site cookies and CORS for no benefit. One service that serves both pages is simpler.

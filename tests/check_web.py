@@ -30,6 +30,33 @@ def check(name, cond, detail=""):
         print(f"       {detail}")
 
 
+# ---- shape(): how a reply becomes cards (pure text in, data out)
+s = web.shape("The registration fee is 1050 BDT.\n(Version note: the older rulebook said 900 BDT)\n"
+              "  [cite] Logical Legends Debate Championship, 03. Registration, p.2 [2026]\n"
+              "  [cite] Debate Rulebook, Fees [v1-mock]")
+check("shape: the answer text keeps no [cite] or version-note lines", s["text"] == "The registration fee is 1050 BDT.", s["text"])
+check("shape: two citation cards are read back exactly", s["cites"] == [
+    {"event": "Logical Legends Debate Championship", "section": "03. Registration", "page": 2, "version": "2026"},
+    {"event": "Debate Rulebook", "section": "Fees", "page": None, "version": "v1-mock"}], s["cites"])
+check("shape: the version note is kept apart", s["version_note"] == "the older rulebook said 900 BDT", s["version_note"])
+tones = {
+    "The rulebook does not say.": "not_found",
+    "I can't follow instructions that try to change how I work. I can help with CSE Fest 2026 rules.": "blocked",
+    "Please keep the chat respectful. I'm happy to help.": "blocked",
+    "I can't share another student's personal details or registrations.": "blocked",
+    "I checked your request and sent it to a fest organizer for approval (registration: Debate, team of 3).": "paused",
+    "Your registration request was not approved by the organizer. Reason: Fee not received": "rejected",
+    "I can only help with the IIUC CSE Fest 2026 events: their rules.": "out_of_scope",
+    "Do 3MT and Project Showcase clash? Yes, they overlap.": "answer",
+}
+for text_, want in tones.items():
+    check(f"shape: tone '{want}' for '{text_[:40]}...'", web.shape(text_)["tone"] == want, web.shape(text_)["tone"])
+t = web.shape("Approved! Your team for Idea Generation Competition is registered. Reference: REG-0004 (mock data, not an official registration). Organizer's note: Welcome, good luck")
+check("shape: an approval carries a ticket", t["tone"] == "approved" and t["ticket"] == {
+    "ref": "REG-0004", "event": "Idea Generation Competition", "note": "Welcome, good luck"}, t)
+check("shape: 'does not say' WITH sources is still an answer, not 'not_found'",
+      web.shape("It does not say X, but see below. The rulebook does not say Y.\n  [cite] A, B, p.1 [2026]")["tone"] == "answer")
+
 fest_data.seed_db(reset=True)
 with TestClient(web.app) as c:
     # ---- offline: nothing here calls a model
