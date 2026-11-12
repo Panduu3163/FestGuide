@@ -20,6 +20,7 @@ Run it:
 
     uv run python chat.py --student C233001        # the student terminal (try --trace and --langsmith)
     uv run python organizer.py --watch             # the organizer terminal
+    uv run python web.py                           # the web version: http://127.0.0.1:8000/ and /organizer
     uv run python demo.py                          # all seven demo moments in one scripted run
     uv run python scorecard.py                     # 32-question scorecard, stored in LangSmith
 
@@ -81,3 +82,15 @@ The live demo script is in `docs/demo.md`; a recorded backup run is in `docs/bac
     uv run python demo.py --step --out docs/backup_run.txt
 
   The fallback model is now gpt-oss-120b: the 20b version returned unusable structured output about half the time.
+- M10 the web version: web.py (FastAPI) and static/ (a student page and an organizer page, plain HTML and JavaScript)
+
+    uv run python web.py                  # student: http://127.0.0.1:8000/   organizer: http://127.0.0.1:8000/organizer
+    uv run python tests/check_web.py      # 21 checks through the real endpoints (add --offline to skip the model calls)
+
+  No new logic: each endpoint calls what the terminals call (`graph.run`, `approvals.pending`, `approvals.decide`),
+  and the two pages are connected through the same checkpoint file as the two terminals. The student page shows each
+  answer with a collapsible "graph steps" trace, holds new messages while a request waits, and shows the organizer's
+  decision by itself (it asks the server every 2 seconds). The organizer page lists waiting requests with the checks,
+  the cited rule and what the student wrote; approve with a note, or reject with a reason. Set `ORGANIZER_PIN` in
+  `.env` to make the organizer endpoints need a PIN. The student picker stands in for a login (mock students only;
+  phone numbers never leave the server). To publish it, put it behind real sign-in first.

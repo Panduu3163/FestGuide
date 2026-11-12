@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FestGuide - Organizer</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header>
+  <h1>FestGuide · Organizer</h1>
+  <span class="badge" id="count">0 waiting</span>
+  <span class="sp"></span>
+  <input id="pin" type="password" placeholder="PIN (if set)" style="width:120px" autocomplete="off">
+  <a href="/" target="_blank">Student page ↗</a>
+</header>
+<main>
+  <div id="inbox"></div>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const inbox = $("inbox");
+let busy = false;          // do not redraw while the organizer is typing a note
+
+function headers() {
+  const h = { "Content-Type": "application/json" };
+  if ($("pin").value) h["X-Pin"] = $("pin").value;
+  return h;
+}
+
+async function api(path, opts = {}) {
+  const r = await fetch(path, { ...opts, headers: headers() });
+  const body = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(body.detail || r.statusText);
+  return body;
+}
+
+function el(tag, cls, content) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (content !== undefined) e.textContent = content;
+  return e;
+}
+
+function card(p) {
+  const req = p.request;
+  const c = el("div", "card");
+  c.append(el("h2", "", `${req.kind.toUpperCase()} request · ${req.event_name}`));
+  c.append(el("div", "meta", `Leader ${p.leader_name} (${req.leader_id})` +
+    (req.member_ids.length ? ` · members ${p.member_names.map((n, i) => `${n} (${req.member_ids[i]})`).join(", ")}` : "")));
+  c.append(el("div", "meta", req.fee_note));
+  req.checks.forEach((k) => {
+    const row = el("div", "check", k.student);
+    const [cls, label] = k.eligible === true ? ["ok", "eligible"] : k.eligible === false ? ["bad", "NOT eligible"] : ["warn", "unclear"];
+    row.append(el("span", "pill " + cls, label));
+    c.append(row);
+    k.problems.forEach((x) => c.append(el("div", "problem", "Problem: " + x)));
+    k.unclear.forEach((x) => c.append(el("div", "unclear", "Unclear: " + x)));
+  });
+  req.cited_rules.forEach((r) => {
+    const d = el("div", "rule");
+    d.append(el("strong", "", `[${r.source}] `), document.createTextNode(r.text.slice(0, 300)));
+    c.append(d);
+  });
+  c.append(el("div", "said", `Student wrote: "${req.student_message}"`));
+
+  const note = el("input"); note.placeholder = "Note for the student (a reason is required to reject)";
+  note.addEventListener("focus", () => (busy = true));
+  note.addEventListener("blur", () => (busy = false));
+  const err = el("span", "err");
+  const decide = (status) => async () => {
+    err.textContent = "";
+    try {
+      await api("/api/organizer/decide", { method: "POST", body: JSON.stringify({ thread_id: p.thread_id, status, note: note.value }) });
+      busy = false;
+      refresh();
+    } catch (e) { err.textContent = e.message; }
+  };
+  const ok = el("button", "ok", "Approve"); ok.onclick = decide("approved");
+  const no = el("button", "bad", "Reject"); no.onclick = decide("rejected");
+  const row = el("div", "actions"); row.append(note, ok, no);
+  c.append(row, err);
+  return c;
+}
+
+let shown = null;          // which requests are on screen; redraw only when this changes, so typing and clicks are never interrupted
+
+async function refresh() {
+  if (busy) return;
+  try {
+    const items = await api("/api/organizer/pending");
+    const now = items.map((p) => p.thread_id).join("|");
+    $("count").textContent = `${items.length} waiting`;
+    if (now === shown) return;
+    shown = now;
+    inbox.textContent = "";
+    if (!items.length) inbox.append(el("div", "empty", "No requests are waiting. New ones appear here by themselves."));
+    items.forEach((p) => inbox.append(card(p)));
+  } catch (e) {
+    shown = null;
+    inbox.textContent = "";
+    inbox.append(el("div", "empty", e.message));
+  }
+}
+
+refresh();
+setInterval(refresh, 3000);
+$("pin").addEventListener("change", refresh);
+</script>
+</body>
+</html>

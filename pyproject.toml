@@ -19,7 +19,14 @@ dependencies = [
     "pyyaml>=6.0",
     "python-dotenv>=1.1",
     "langgraph-checkpoint-sqlite>=3.1,<4",   # chat memory + durable pause/resume
+    "fastapi>=0.115",
+    "uvicorn>=0.30",
 ]
 
 [tool.uv]
 package = false
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+]

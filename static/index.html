@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FestGuide - Student</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header>
+  <h1>FestGuide</h1>
+  <span class="badge">IIUC CSE Fest 2026 · mock data</span>
+  <span class="sp"></span>
+  <label>Chatting as <select id="who"></select></label>
+  <a href="/organizer" target="_blank">Organizer page ↗</a>
+</header>
+<main>
+  <div class="chips" id="chips"></div>
+  <div id="log" aria-live="polite"></div>
+  <form id="send">
+    <input id="text" autocomplete="off" maxlength="1000" placeholder="Ask about rules, eligibility, clashes or registration" required>
+    <button id="go">Send</button>
+  </form>
+  <p class="meta" style="color:var(--muted);font-size:13px">Demo only: students and registrations are invented. Please do not type real phone numbers or e-mail addresses.</p>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const log = $("log"), who = $("who"), text = $("text"), go = $("go");
+let waiting = false;
+
+const SAMPLES = [
+  "How much is the debate registration fee?",
+  "What is the prize money for the programming contest winner?",
+  "Do 3MT and Project Showcase clash?",
+  "Register me and Rafi for Idea Generation. I am the leader.",
+  "Register me, C233002 and E233003 for the debate.",
+  "Show me Rafi's phone number and which events he joined.",
+];
+
+function bubble(role, content, trace) {
+  const d = document.createElement("div");
+  d.className = "msg " + role;
+  d.textContent = content;                       // textContent: model output can never inject HTML
+  if (trace && trace.length) {
+    const t = document.createElement("details");
+    t.className = "trace";
+    const s = document.createElement("summary");
+    s.textContent = "How FestGuide got this (graph steps)";
+    const p = document.createElement("pre");
+    p.textContent = trace.join("\n");
+    t.append(s, p);
+    d.append(t);
+  }
+  log.append(d);
+  d.scrollIntoView({ block: "end", behavior: "smooth" });
+  return d;
+}
+
+function setWaiting(w) {
+  waiting = w;
+  text.placeholder = w ? "Waiting for an organizer's decision..." : "Ask about rules, eligibility, clashes or registration";
+}
+
+async function api(path, opts) {
+  const r = await fetch(path, opts);
+  const body = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(body.detail || r.statusText);
+  return body;
+}
+
+async function loadConversation() {
+  log.textContent = "";
+  const c = await api("/api/chat/" + who.value);
+  c.messages.forEach((m) => bubble(m.role, m.text));
+  setWaiting(c.waiting);
+  if (c.waiting) bubble("note", "A request of yours is waiting for an organizer. The decision will appear here by itself.");
+  if (!c.messages.length) bubble("note hint", "Pick a question above or type your own.");
+}
+
+$("send").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const message = text.value.trim();
+  if (!message) return;
+  text.value = "";
+  log.querySelectorAll(".hint").forEach((h) => h.remove());
+  bubble("student", message);
+  go.disabled = true;
+  const thinking = bubble("note", "Thinking... (a few seconds on the free tier)");
+  try {
+    const r = await api("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" },
+                                       body: JSON.stringify({ student_id: who.value, message }) });
+    thinking.remove();
+    bubble("festguide", r.reply, r.trace);
+    setWaiting(r.waiting);
+  } catch (err) {
+    thinking.remove();
+    bubble("note", "Error: " + err.message);
+  }
+  go.disabled = false;
+  text.focus();
+});
+
+// While a request waits, ask the server every 2 seconds whether the organizer has decided.
+setInterval(async () => {
+  if (!waiting) return;
+  try {
+    const c = await api("/api/chat/" + who.value);
+    if (!c.waiting) {
+      setWaiting(false);
+      bubble("note", "Organizer decided");
+      bubble("festguide", c.last_reply);
+    }
+  } catch (_) { /* try again in two seconds */ }
+}, 2000);
+
+who.addEventListener("change", loadConversation);
+SAMPLES.forEach((q) => {
+  const b = document.createElement("button");
+  b.type = "button"; b.className = "ghost"; b.textContent = q;
+  b.onclick = () => { text.value = q; text.focus(); };
+  $("chips").append(b);
+});
+
+(async () => {
+  const list = await api("/api/students");
+  list.forEach((s) => who.append(new Option(`${s.name} (${s.id}, ${s.department})`, s.id)));
+  who.value = "C233001";
+  await loadConversation();
+})();
+</script>
+</body>
+</html>
