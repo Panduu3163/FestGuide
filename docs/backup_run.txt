@@ -1,5 +1,3 @@
-BACKUP RUN (recorded 2026-11-12): Gemini's daily free quota was used up, so every model call in this recording was answered by the OpenRouter fallback (gpt-oss-120b). Re-record with Gemini: uv run python demo.py --out docs/backup_run.txt
-
 FestGuide demo | model google_genai:gemini-3.5-flash-lite (fallback openrouter:openai/gpt-oss-120b) | mock data | LangSmith tracing: true
 
 ==============================================================================
@@ -9,12 +7,13 @@ MOMENT 1: A rules answer with a citation (RAG, C6)
 C233001 says: How much is the debate registration fee?
   -> intake
   -> rewrite  (unchanged)
-  -> classify  {"intent": "rules", "events": ["debate"], "student_id": null, "wants_exception": false, "asks_about_other_person": false, "reason": "asks about registration fee for debate event"}
+  -> classify  {"intent": "rules", "events": ["debate"], "student_id": null, "wants_exception": false, "asks_about_other_person": false, "reason": "The user is asking about the registration fee for the debate event, which falls under rules and fees."}
   -> retrieve
   -> answer
   -> compose_reply
 
-FestGuide: The registration fee is 1050 BDT per team.
+FestGuide: The registration fee for the Logical Legends Debate Championship is 1050 BDT per team.
+(Version note: The older mock version listed the registration fee as 900 BDT per team.)
   [cite] Logical Legends Debate Championship, 04. Registration Information, p.6 [2026]
 
 ==============================================================================
@@ -24,12 +23,12 @@ MOMENT 2: "The rulebook does not say" (grounding, C6)
 C233001 says: What is the prize money for the programming contest winner?
   -> intake
   -> rewrite  (unchanged)
-  -> classify  {"intent": "rules", "events": ["solo_programming"], "student_id": null, "wants_exception": false, "asks_about_other_person": false, "reason": "The user asks about prize money, which is a rule/detail about an event."}
+  -> classify  {"intent": "rules", "events": ["solo_programming"], "student_id": null, "wants_exception": false, "asks_about_other_person": false, "reason": "The user is asking about the prize money for the programming contest, which falls under event rules and details."}
   -> retrieve
   -> answer
   -> compose_reply
 
-FestGuide: The rulebook does not say. The rulebook does not specify any prize money for the programming contest winner.
+FestGuide: The rulebook does not say anything about the prize money for the programming contest winner.
 
 ==============================================================================
 MOMENT 3: A schedule clash found by a tool (C3)
@@ -38,13 +37,13 @@ MOMENT 3: A schedule clash found by a tool (C3)
 C233001 says: Do 3MT and Project Showcase clash?
   -> intake
   -> rewrite  (unchanged)
-  -> classify  {"intent": "plan", "events": ["three_mt", "project_showcase"], "student_id": null, "wants_exception": false, "asks_about_other_person": false, "reason": "User wants to know if the two events overlap in schedule."}
+  -> classify  {"intent": "plan", "events": ["three_mt", "project_showcase"], "student_id": null, "wants_exception": false, "asks_about_other_person": false, "reason": "The student is checking if two specific events clash in time to plan their schedule."}
   -> tool_agent
        [tool] check_schedule_clash({"events": ["three_mt", "project_showcase"]}) -> {"clashes": [{"events": ["three_mt", "project_showcase"], "date": "2026-06-14", "times": ["10:30-13:00", "10:00-15:00"]}], "same_day_no_overlap": [], 
   -> explain_result
   -> compose_reply
 
-FestGuide: The three‑minute thesis (3MT) runs on 2026‑06‑14 from 10:30 to 13:00. The Project Showcase is also listed for 2026‑06‑14, from 10:00 to 15:00 (this time is mock data). Because the times overlap, the events clash. The clash information is based on the mock schedule for the showcase. Please confirm times with the organizers.
+FestGuide: Yes, 3MT and Project Showcase clash on 2026-06-14, with 3MT scheduled for 10:30-13:00 and Project Showcase scheduled for 10:00-15:00. The Project Showcase time (10:00-15:00) is MOCK data; the rulebook gives none. Please confirm times with the organizers.
 
 ==============================================================================
 MOMENT 4: A registration that pauses for the organizer and completes after approval (E1)
@@ -53,11 +52,11 @@ MOMENT 4: A registration that pauses for the organizer and completes after appro
 C233001 says: Register me and Rafi for Idea Generation. I am the leader.
   -> intake
   -> rewrite  (unchanged)
-  -> classify  {"intent": "register", "events": ["idea_generation"], "student_id": null, "wants_exception": false, "asks_about_other_person": false, "reason": "User wants to register themselves and a teammate for the Idea Generation event."}
+  -> classify  {"intent": "register", "events": ["idea_generation"], "student_id": null, "wants_exception": false, "asks_about_other_person": false, "reason": "The student wants to register a team for Idea Generation."}
   -> tool_agent
-       [tool] check_eligibility({"event": "idea_generation", "student": "me"}) -> {"student_id": "C233001", "name": "Arif Hossain", "department": "CSE", "event": "idea_generation", "event_name": "Idea Generation Competition", "eligi
+       [tool] check_eligibility({"student": "me", "event": "idea_generation"}) -> {"student_id": "C233001", "name": "Arif Hossain", "department": "CSE", "event": "idea_generation", "event_name": "Idea Generation Competition", "eligi
        [tool] check_eligibility({"event": "idea_generation", "student": "Rafi"}) -> {"student_id": "C233002", "name": "Rafi Ahmed", "department": "CSE", "event": "idea_generation", "event_name": "Idea Generation Competition", "eligibl
-       [tool] search_rules({"event": "idea_generation", "question": "What are the eligibility criteria and team size for Idea Generation?"}) -> [{"source": "Idea Generation Competition, 08. Rules & Regulations, p.10 [2026]", "source_type": "rulebook", "text": "- All submissions must be origina
+       [tool] search_rules({"question": "team size eligibility rule", "event": "idea_generation"}) -> [{"source": "Idea Generation Competition, 01-02. Introduction and Eligibility Criteria, p.3 [2026]", "source_type": "rulebook", "text": "- Open for al
   -> draft_request
        [request] registration for Idea Generation Competition: team ['C233001', 'C233002']; problems: none; no fee stated in the rulebook
   -> approval_gate  (paused: waiting for an organizer)
@@ -81,12 +80,12 @@ MOMENT 5: A rejected request (E1, C5)
 C233001 says: Register me, C233002 and E233003 for the debate.
   -> intake
   -> rewrite  (unchanged)
-  -> classify  {"intent": "register", "events": ["debate"], "student_id": "C233002", "wants_exception": false, "asks_about_other_person": false, "reason": "User wants to register a team for debate."}
+  -> classify  {"intent": "register", "events": ["debate"], "student_id": null, "wants_exception": false, "asks_about_other_person": false, "reason": "The user wants to register a team for the debate event."}
   -> tool_agent
-       [tool] check_eligibility({"student": "me", "event": "debate"}) -> {"student_id": "C233001", "name": "Arif Hossain", "department": "CSE", "event": "debate", "event_name": "Logical Legends Debate Championship", "eligib
-       [tool] check_eligibility({"student": "C233002", "event": "debate"}) -> {"student_id": "C233002", "name": "Rafi Ahmed", "department": "CSE", "event": "debate", "event_name": "Logical Legends Debate Championship", "eligible
-       [tool] check_eligibility({"student": "E233003", "event": "debate"}) -> {"student_id": "E233003", "name": "Tania Sultana", "department": "EEE", "event": "debate", "event_name": "Logical Legends Debate Championship", "eligi
-       [tool] search_rules({"question": "debate eligibility and team size", "event": "debate"}) -> [{"source": "Logical Legends Debate Championship, 03. Team Formation, p.5 [2026]", "source_type": "rulebook", "text": "Each team has 3 members. - Cros
+       [tool] check_eligibility({"event": "debate", "student": "me"}) -> {"student_id": "C233001", "name": "Arif Hossain", "department": "CSE", "event": "debate", "event_name": "Logical Legends Debate Championship", "eligib
+       [tool] check_eligibility({"event": "debate", "student": "C233002"}) -> {"student_id": "C233002", "name": "Rafi Ahmed", "department": "CSE", "event": "debate", "event_name": "Logical Legends Debate Championship", "eligible
+       [tool] check_eligibility({"event": "debate", "student": "E233003"}) -> {"student_id": "E233003", "name": "Tania Sultana", "department": "EEE", "event": "debate", "event_name": "Logical Legends Debate Championship", "eligi
+       [tool] search_rules({"question": "eligibility team size", "event": "debate"}) -> [{"source": "Logical Legends Debate Championship, 03. Team Formation, p.5 [2026]", "source_type": "rulebook", "text": "Each team has 3 members. - Cros
   -> draft_request
        [request] registration for Logical Legends Debate Championship: team ['C233001', 'C233002', 'E233003']; problems: none; fee 1050 BDT per team
   -> approval_gate  (paused: waiting for an organizer)

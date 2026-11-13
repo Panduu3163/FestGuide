@@ -13,6 +13,11 @@ import sys
 import tempfile
 from pathlib import Path
 
+# Searching the rulebooks embeds the question with Gemini too, which would fail for the wrong reason here. This test is
+# about the CHAT model, so the search uses the local embedder (needs the index built once with the same two variables,
+# see README: FESTGUIDE_EMBED_MODEL=fastembed:BAAI/bge-small-en-v1.5, FESTGUIDE_EMBED_DIM=384, then python -m kb.ingest).
+os.environ.setdefault("FESTGUIDE_EMBED_MODEL", "fastembed:BAAI/bge-small-en-v1.5")
+os.environ.setdefault("FESTGUIDE_EMBED_DIM", "384")
 os.environ["GEMINI_API_KEY"] = "this-key-is-wrong-on-purpose"       # load_dotenv does not override variables that are already set
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from config import settings  # noqa: E402
