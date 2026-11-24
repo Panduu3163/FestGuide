@@ -29,6 +29,9 @@ CASES = [
     ("Can B243013 join Idea Generation?", {"plan"}, "B243013", ["idea_generation"], False),
     ("hello", {"other"}, None, [], False),
     ("Can Tania and I join Idea Generation?", {"plan"}, None, ["idea_generation"], False),
+    ("i want to register in the 3mt", {"register"}, None, ["three_mt"], False),
+    ("i want to register for econ pitch", {"register"}, None, ["econ_policy_pitch"], False),
+    ("i want to register for literary contest", {"register"}, None, ["literary_eloquence"], False),
 ]
 
 if __name__ == "__main__":

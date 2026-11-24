@@ -29,7 +29,7 @@ from collections import defaultdict, deque
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response
+from fastapi import Body, Depends, FastAPI, Header, HTTPException, Request, Response
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -38,7 +38,7 @@ import fest_data
 from approvals import decide, is_waiting, last_reply, pending, thread_ids
 from chat import friendly_error
 from fest_data import SEED_TEAMS, load_students
-from graph import build_graph, run
+from graph import build_graph, paused_reply, run
 from kb import store
 from memory import checkpointer, thread_id_for
 
@@ -162,8 +162,10 @@ def shape(text: str) -> dict:
     low = clean.lower()
     tone = ("approved" if "approved! your team" in low else
             "rejected" if "was not approved by the organizer" in low else
-            "paused" if "sent it to a fest organizer for approval" in low else
-            "blocked" if low.startswith(("i can't follow instructions", "please keep the chat respectful", "i can't share another")) else
+            "paused" if "sent it to a fest organizer for approval" in low or "waiting for an organizer's decision" in low else
+            "blocked" if low.startswith(("i can't follow instructions", "please keep the chat respectful",
+                                         "i can't share another", "that message is too long",
+                                         "this conversation has reached its message limit")) else
             "not_found" if "rulebook does not say" in low and not cites else
             "out_of_scope" if "i can only help with the iiuc" in low else
             "answer")
@@ -186,6 +188,19 @@ class DecisionIn(BaseModel):
     note: str = ""
 
 
+class StudentIn(BaseModel):
+    id: str = Field(min_length=4, max_length=16)
+    name: str = Field(min_length=2, max_length=80)
+    department: str = Field(min_length=2, max_length=20)
+    year: int = Field(default=1, ge=1, le=5)
+    level: str = "undergraduate"
+    gender: str = "male"
+
+
+class ResetIn(BaseModel):
+    include_custom_students: bool = False
+
+
 # ---------------------------------------------------------------- student side
 
 @app.get("/api/config")
@@ -193,10 +208,104 @@ def config() -> dict:
     return {"demo": demo()}
 
 
+def _iso(val):
+    return val.isoformat() if hasattr(val, "isoformat") else val
+
+
+@app.get("/api/overview")
+def overview() -> dict:
+    """Read-only event directory and team registration ledger (no phone numbers)."""
+    events_map = fest_data.load_events()
+    sched_map = fest_data.load_schedule()
+    students_map = load_students()
+
+    events_out = []
+    for key, ev in events_map.items():
+        sch = sched_map.get(key, {})
+        events_out.append({
+            "key": key,
+            "name": ev["name"],
+            "team_min": ev.get("team_min"),
+            "team_max": ev.get("team_max"),
+            "fee_bdt": ev.get("fee_bdt"),
+            "fee_per": ev.get("fee_per"),
+            "event_date": _iso(ev.get("event_date")),
+            "reg_deadline": _iso(ev.get("reg_deadline")),
+            "eligible_departments": ev.get("eligible_departments"),
+            "eligible_level": ev.get("eligible_level"),
+            "start": sch.get("start"),
+            "end": sch.get("end"),
+            "schedule_source": sch.get("source"),
+        })
+
+    members_by_ref: dict[str, list[str]] = defaultdict(list)
+    with fest_data.db() as conn:
+        team_rows = conn.execute(
+            "SELECT ref, event, leader_id, status, organizer_note, created_at FROM teams ORDER BY ref"
+        ).fetchall()
+        member_rows = conn.execute(
+            "SELECT ref, student_id FROM team_members ORDER BY ref, rowid"
+        ).fetchall()
+    for mr in member_rows:
+        members_by_ref[mr["ref"]].append(mr["student_id"])
+
+    def student_name(sid: str) -> str:
+        rec = students_map.get(sid)
+        return rec["name"] if rec else sid
+
+    regs_out = []
+    for tr in team_rows:
+        mids = members_by_ref.get(tr["ref"], [])
+        ev = events_map.get(tr["event"], {})
+        regs_out.append({
+            "ref": tr["ref"],
+            "event": tr["event"],
+            "event_name": ev.get("name", tr["event"]),
+            "leader_id": tr["leader_id"],
+            "leader_name": student_name(tr["leader_id"]),
+            "member_ids": mids,
+            "member_names": [student_name(m) for m in mids],
+            "status": tr["status"],
+            "organizer_note": tr["organizer_note"],
+            "created_at": tr["created_at"],
+        })
+
+    return {"events": events_out, "registrations": regs_out}
+
+
 @app.get("/api/students")
 def students() -> list[dict]:
     """Only what the picker needs. Phone numbers never leave the server."""
-    return [{"id": s["id"], "name": s["name"], "department": s["department"]} for s in load_students().values()]
+    return [{"id": s["id"], "name": s["name"], "department": s["department"],
+             "level": s.get("level", "undergraduate"), "year": s.get("year", 1),
+             "custom": bool(s.get("custom", False))}
+            for s in load_students().values()]
+
+
+@app.post("/api/students")
+def create_student_api(body: StudentIn) -> dict:
+    try:
+        s = fest_data.create_student(body.id, body.name, body.department, body.year, body.level, body.gender)
+    except ValueError as err:
+        raise HTTPException(422, str(err))
+    return {"id": s["id"], "name": s["name"], "department": s["department"],
+            "level": s["level"], "year": s["year"], "custom": True}
+
+
+@app.delete("/api/students/{student_id}")
+def delete_student_api(student_id: str, ses: str = Depends(session)) -> dict:
+    sid = student_id.strip().upper()
+    try:
+        fest_data.delete_student(sid)
+    except LookupError as err:
+        raise HTTPException(404, str(err))
+    except ValueError as err:
+        raise HTTPException(400, str(err))
+    saver = app_state["saver"]
+    prefix = f"student-{sid}-web"
+    for tid in [t for t in thread_ids(saver) if t.startswith(prefix) and mine(t, ses)]:
+        saver.delete_thread(tid)
+    return {"ok": True}
 
 
 @app.post("/api/chat")
@@ -231,10 +340,18 @@ def conversation(student_id: str, ses: str = Depends(session)) -> dict:
     sid = student_or_404(student_id)["id"]
     graph = app_state["graph"]
     thread = thread_of(sid, ses)
-    messages = graph.get_state({"configurable": {"thread_id": thread}}).values.get("messages", [])
-    waiting = is_waiting(graph, thread)
-    return {"messages": [{"role": "student", "text": m.content} if m.type == "human" else {"role": "festguide", **shape(m.content)}
-                         for m in messages],
+    snap = graph.get_state({"configurable": {"thread_id": thread}})
+    messages = snap.values.get("messages", [])
+    waiting = any(task.interrupts for task in snap.tasks)
+    out = [{"role": "student", "text": m.content} if m.type == "human" else {"role": "festguide", **shape(m.content)}
+           for m in messages]
+    if waiting:
+        # compose_reply has not run yet during interrupt(), so surface the in-flight turn from state.
+        if masked := snap.values.get("masked"):
+            out.append({"role": "student", "text": masked})
+        if req := snap.values.get("request"):
+            out.append({"role": "festguide", **shape(paused_reply(req))})
+    return {"messages": out,
             "waiting": waiting, "last": None if waiting else shape(last_reply(graph, thread)), "last_reply": "" if waiting else last_reply(graph, thread)}
 
 
@@ -269,32 +386,27 @@ def decision(body: DecisionIn, ses: str = Depends(session)) -> dict:
 
 
 @app.post("/api/demo/reset")
-def reset_demo(ses: str = Depends(session)) -> dict:
-    """Demo mode: forget this visitor's chats and put the registrations back to the seed teams."""
-    if not demo():
-        raise HTTPException(404, "Not in demo mode.")
+def reset_demo(body: ResetIn | None = Body(default=None), ses: str = Depends(session)) -> dict:
+    """Forget chats (all in local mode, or this visitor's in demo mode) and restore registrations to the 3 seed teams."""
     saver = app_state["saver"]
-    for tid in [t for t in thread_ids(saver) if mine(t, ses)]:
+    for tid in [t for t in thread_ids(saver) if (not demo() or mine(t, ses))]:
         saver.delete_thread(tid)
     restore_registrations()
+    if body and body.include_custom_students and not demo():
+        fest_data.clear_custom_students()
     return {"ok": True}
 
 
 # ---------------------------------------------------------------- pages
 
+NO_CACHE = {"Cache-Control": "no-store"}
+
+
 @app.get("/")
-def student_page():
-    return FileResponse(STATIC / "index.html")
-
-
 @app.get("/organizer")
-def organizer_page():
-    return FileResponse(STATIC / "organizer.html")
-
-
 @app.get("/demo")
-def demo_page():
-    return FileResponse(STATIC / "demo.html")
+def spa_pages():
+    return FileResponse(STATIC / "index.html", headers=NO_CACHE)
 
 
 app.mount("/static", StaticFiles(directory=STATIC), name="static")

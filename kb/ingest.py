@@ -68,8 +68,10 @@ def load_faq_docs() -> list[Document]:
 
 def load_corpus() -> list[Document]:
     docs = []
-    for event in load_events():
-        docs += load_rulebook(settings.RULEBOOK_DIR / "clean" / f"{event}.md", event, "2026", "rulebook")
+    events = load_events()
+    for event, info in events.items():
+        cur_type = "mock" if info.get("source") == "mock" else "rulebook"
+        docs += load_rulebook(settings.RULEBOOK_DIR / "clean" / f"{event}.md", event, "2026", cur_type)
         docs += load_rulebook(settings.RULEBOOK_DIR / "clean_v1_mock" / f"{event}.md", event, "v1-mock", "mock")
     return docs + load_faq_docs()
 

@@ -24,7 +24,7 @@ CHANGES = {
                ("1050 BDT per team", "900 BDT per team"),
                ("2 June 2026 to 10 June 2026", "2 June 2026 to 8 June 2026")],
     "tech_olympiad": [("at least 30 minutes", "at least 15 minutes")],
-    "idea_generation": [("Team size: 2-3 members.", "Team size: 3-4 members."),
+    "idea_generation": [("Team size: 1-3 members.", "Team size: 3-4 members."),
                         ("5 minutes presentation", "7 minutes presentation")],
     "three_mt": [("Registration fee: 100 BDT.", "Registration fee: 150 BDT."),
                  ("12 June 2026 (Friday)", "10 June 2026 (Wednesday)")],

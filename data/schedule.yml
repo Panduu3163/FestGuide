@@ -6,5 +6,8 @@ schedule:
   - {event: three_mt,          date: 2026-06-14, start: "10:30", end: "13:00", source: rulebook}  # female 10:30; male 13:40 (rulebook)
   - {event: project_showcase,  date: 2026-06-14, start: "10:00", end: "15:00", source: mock}
   - {event: videography,       date: 2026-06-16, start: "10:00", end: "13:00", source: mock}
-  - {event: debate,            date: 2026-06-12, start: "10:00", end: "16:00", source: mock}      # male preliminary day
-  - {event: tech_olympiad,     date: 2026-06-13, start: "11:00", end: "12:30", source: mock}      # rulebook gives no date or time
+  - {event: debate,             date: 2026-06-12, start: "10:00", end: "16:00", source: mock}      # male preliminary day
+  - {event: tech_olympiad,      date: 2026-06-13, start: "11:00", end: "12:30", source: mock}      # rulebook gives no date or time
+  - {event: business_case,      date: 2026-06-13, start: "14:00", end: "17:00", source: mock}
+  - {event: econ_policy_pitch,  date: 2026-06-16, start: "11:00", end: "13:30", source: mock}
+  - {event: literary_eloquence, date: 2026-06-12, start: "14:30", end: "16:30", source: mock}

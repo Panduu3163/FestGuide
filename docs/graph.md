@@ -25,6 +25,7 @@ graph TD;
 	answer --> compose_reply;
 	approval_gate -.-> compose_reply;
 	approval_gate -.-> register_team;
+	classify -.-> draft_request;
 	classify -.-> out_of_scope;
 	classify -.-> retrieve;
 	classify -.-> tool_agent;

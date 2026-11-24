@@ -43,6 +43,9 @@ SEARCH_CASES = [
     ("Are smartwatches allowed in the Tech Olympiad exam?", "tech_olympiad", "Rules"),
     ("How long is the idea generation presentation?", "idea_generation", "Presentation"),
     ("What is the file name format for idea generation submissions?", "idea_generation", "Submission Format"),
+    ("Who can join the Business Case Challenge?", "business_case", "Overview & Eligibility"),
+    ("What is the registration fee for Economics & Banking Policy Pitch?", "econ_policy_pitch", "Registration, Fee & Schedule"),
+    ("Who is eligible for the English Literary & Eloquence Contest?", "literary_eloquence", "Overview & Eligibility"),
 ]
 
 
@@ -53,6 +56,8 @@ def words(text: str) -> set[str]:
 def check_files() -> int:
     problems = 0
     for event, info in load_events().items():
+        if info.get("source") == "mock":
+            continue
         pdf = PdfReader(settings.RULEBOOK_DIR / info["rulebook"])
         raw = [(p.extract_text() or "") for p in pdf.pages]
         clean = (settings.RULEBOOK_DIR / "clean" / f"{event}.md").read_text(encoding="utf-8")

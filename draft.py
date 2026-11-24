@@ -12,7 +12,7 @@ from tools import check_eligibility_impl, search_rules_impl
 
 
 def build_request(student_id: str, question: str, events: list[str], wants_exception: bool,
-                  log: list[dict]) -> tuple[dict | None, str | None]:
+                  log: list[dict], carryover_ids: list[str] | None = None) -> tuple[dict | None, str | None]:
     if len(events) != 1:
         return None, "Which single event do you want to register for? Please name one event."
     event = events[0]
@@ -28,14 +28,29 @@ def build_request(student_id: str, question: str, events: list[str], wants_excep
                 unknown.append(res["error"])
     if unknown:
         return None, "I could not identify everyone in your team: " + "; ".join(unknown) + ". Please give student IDs."
-
-    lo, hi = ev["team_min"], ev["team_max"]
-    if lo and hi and not lo <= len(ids) <= hi:
-        size = f"{lo}" if lo == hi else f"{lo} to {hi}"
-        return None, f"{ev['name']} needs a team of {size}, but you listed {len(ids)}. Please correct the team."
+    if wants_exception and len(ids) == 1 and carryover_ids:
+        for cid in carryover_ids:
+            if cid not in ids:
+                ids.append(cid)
 
     checks = [check_eligibility_impl(i, event) for i in ids]
     problems = [f"{c['name']} ({c['student_id']}, {c['department']}): {p}" for c in checks for p in c["problems"]]
+
+    lo, hi = ev["team_min"], ev["team_max"]
+    size_problem = None
+    if lo and hi and not lo <= len(ids) <= hi:
+        size = f"{lo}" if lo == hi else f"{lo} to {hi}"
+        if not wants_exception:
+            extra = f" Note: {'; '.join(problems)}." if problems else ""
+            return None, f"{ev['name']} needs a team of {size}, but you listed {len(ids)}.{extra} Please correct the team."
+        size_problem = f"Team size is {len(ids)}, outside the allowed {size}"
+
+    already = [f"{c['name']} ({c['student_id']}): {p}" for c in checks for p in c["problems"] if "already in a registered team" in p]
+    if already and not wants_exception:
+        return None, "Cannot submit registration: " + "; ".join(already) + "."
+
+    if size_problem:
+        problems.append(size_problem)
     # The organizer must always see the cited rule, so the code searches for it itself instead of
     # hoping the model called search_rules.
     rules = search_rules_impl("who may join: open to which students, eligibility, team size and members", event)[:2]
@@ -48,6 +63,7 @@ def build_request(student_id: str, question: str, events: list[str], wants_excep
         "checks": [{"student": f"{c['name']} ({c['student_id']}, {c['department']})", "eligible": c["eligible"],
                     "problems": c["problems"], "unclear": c["unclear"]} for c in checks],
         "problems": problems,
+        "team_problems": [size_problem] if size_problem else [],
         "cited_rules": rules,
         "fee_note": (f"fee {ev['fee_bdt']} BDT per {ev['fee_per']}" if ev["fee_bdt"] else "no fee stated in the rulebook")
                     + (" (MOCK)" if "fee_bdt" in (ev.get("mock_fields") or []) else ""),

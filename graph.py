@@ -30,6 +30,7 @@ from kb import rag, store
 from agent import run_tools
 from draft import build_request
 from config import settings
+from fest_data import load_events, load_schedule, load_students
 from guards import check_message
 from memory import history_text, turn_messages
 from models import build_model, load_prompt
@@ -56,6 +57,7 @@ class State(TypedDict, total=False):
     blocked: dict              # set by intake when a guardrail refuses the message: {"kind", "message"}
     notes: list                # things the student should be told ("I hid a private number")
     turns: int                 # messages so far in this chat (the cost fuse)
+    draft_members: list        # teammate IDs from an immediately preceding refused draft (for exception follow-ups)
 
 
 # ---- nodes ---------------------------------------------------------------------------------
@@ -75,8 +77,14 @@ def intake(state: State) -> dict:
     return reset | {"masked": result.text, "standalone": result.text, "blocked": None, "notes": result.notes}
 
 
-FOLLOW_UP_CUES = re.compile(r"\b(it|its|that|this|those|these|they|them|their|he|him|she|her|one|ones|same|other|also|"
-                            r"both|first|second|third|last|former|latter|again|there|then)\b|^(and|what about|how about|so|but)\b", re.I)
+FOLLOW_UP_CUES = re.compile(
+    r"\b(it|its|that|this|those|these|they|them|their|he|him|she|her|us|our|both|former|latter|also|again|anyway|instead"
+    r"|exception|waiver|permission|teammates?|organi[sz]ers?|allow)\b"
+    r"|\b(first|second|third|last|other|same|which)\s+ones?\b"
+    r"|\bthe\s+(same|other|second|third|former|latter)\b"
+    r"|^(and|what about|how about|so|but)\b",
+    re.I,
+)
 
 
 def needs_rewrite(question: str, history: list) -> bool:
@@ -116,12 +124,29 @@ def _rewriter():
     return _rw
 
 
+_EVENT_ALIASES = [
+    ("solo_programming", re.compile(r"\b(?:solo\s+)?programming(?:\s+contest)?\b", re.I)),
+    ("videography", re.compile(r"\bvideograph(?:y|er)\b", re.I)),
+    ("debate", re.compile(r"\b(?:logical\s+legends\s+)?debate\b", re.I)),
+    ("tech_olympiad", re.compile(r"\b(?:tech\s+)?olympiad\b", re.I)),
+    ("idea_generation", re.compile(r"\bidea\s*gen(?:eration)?\b", re.I)),
+    ("three_mt", re.compile(r"\b(?:3\s*mt|three[\s-]+minute\s+thesis)\b", re.I)),
+    ("project_showcase", re.compile(r"\b(?:project\s+)?showcase\b", re.I)),
+    ("business_case", re.compile(r"\bbusiness\s+case\b", re.I)),
+    ("econ_policy_pitch", re.compile(r"\b(?:econ(?:omics?)?(?:\s*&\s*banking)?\s+(?:policy\s+)?pitch|banking\s+policy\s+pitch)\b", re.I)),
+    ("literary_eloquence", re.compile(r"\b(?:english\s+literary(?:\s*&\s*eloquence)?|literary\s+(?:&\s*eloquence\s+)?contest|eloquence)\b", re.I)),
+]
+
+
 def classify(state: State) -> dict:
     """C1: the model returns an Intent object (Pydantic). Its `intent` field picks the route."""
     template, version = load_prompt("classify_prompt")
     prompt = template.format(question=state["standalone"])
     intent: Intent = _classifier().invoke(prompt, config={"run_name": "classify", "tags": [f"prompt:classify_prompt:{version}"]})
-    return {"intent": intent.model_dump()}
+    data = intent.model_dump()
+    if data["intent"] in ("rules", "plan", "register") and not data["events"]:
+        data["events"] = [key for key, pat in _EVENT_ALIASES if pat.search(state["standalone"])]
+    return {"intent": data}
 
 
 _cls = None
@@ -178,10 +203,16 @@ def draft_request(state: State) -> dict:
     """Build the registration / exception request from the checked facts (draft.py), or say why it cannot be built."""
     intent = state["intent"]
     request, message = build_request(state["student_id"], state["masked"], intent["events"],
-                                     intent["wants_exception"], state["tool_log"])
+                                     intent["wants_exception"], state["tool_log"],
+                                     carryover_ids=state.get("draft_members"))
     if request is None:
-        return {"request": None, "answer": message}
-    return {"request": request}
+        members = [
+            e["result"]["student_id"] for e in state.get("tool_log") or []
+            if e.get("tool") == "check_eligibility" and isinstance(e.get("result"), dict)
+            and "student_id" in e["result"] and e["result"]["student_id"] != state["student_id"]
+        ]
+        return {"request": None, "answer": message, "draft_members": list(dict.fromkeys(members))}
+    return {"request": request, "draft_members": []}
 
 
 def approval_gate(state: State) -> dict:
@@ -214,10 +245,93 @@ def register_team(state: State) -> dict:
                       f"Reference: {result['ref']} (mock data, not an official registration).{note}"}
 
 
+_GREETING_RE = re.compile(
+    r"^\s*(?:assalamu\s*alaikum|as-?salamu\s*alaykum|salam|hi+|hello+|hey+|good\s+(?:morning|afternoon|evening)"
+    r"|how\s+are\s+you|what'?s\s+up|who\s+are\s+you)(?:[\s,!?.]+(?:festguide|bro|bot|assistant|there|everyone|sir|mam))?[\s!?.]*$",
+    re.I,
+)
+_THANKS_RE = re.compile(
+    r"^\s*(?:thanks?(?:\s+you|\s+a\s+lot)?|thank\s+you(?:\s+(?:so|very)\s+much)?|thx|jazak\s*allah(?:\s+khair)?|shukriya"
+    r"|bye|goodbye|see\s+you|cool|nice|awesome|great|ok(?:ay)?\s+thanks?)[\s!.,?]*$",
+    re.I,
+)
+_OVERVIEW_RE = re.compile(
+    r"\b(what\s+can\s+you\s+do|how\s+(?:do|can)\s+(?:i|you)\s+(?:use|work|help)|help\s+me"
+    r"|what\s+(?:are|is)\s+(?:all\s+)?(?:the\s+)?(?:events|competitions|contests|rulebooks?)"
+    r"|(?:list|show|tell\s+me(?:\s+all)?(?:\s+about)?)\s+(?:the\s+|all\s+)?(?:events|competitions|contests|rulebooks?|rules|fest)"
+    r"|which\s+(?:events|rulebooks?)\s+(?:are\s+there|do\s+you\s+have))\b"
+    r"|^\s*(?:events?|rulebooks?|help|menu|guide)\s*[?!.]*\s*$",
+    re.I,
+)
+
+
+def _conversational_kind(text: str) -> str | None:
+    if _GREETING_RE.match(text):
+        return "greeting"
+    if _THANKS_RE.match(text):
+        return "thanks"
+    if _OVERVIEW_RE.search(text):
+        return "overview"
+    return None
+
+
+def _format_event_line(key: str, ev: dict, sched: dict) -> str:
+    lo, hi = ev.get("team_min"), ev.get("team_max")
+    team = "Solo (1)" if lo == 1 and hi == 1 else (f"Team of {lo}" if lo == hi else f"{lo}–{hi} members")
+    depts = "All IIUC depts" if ev.get("eligible_departments") == "all" else (
+        ", ".join(ev["eligible_departments"]) if isinstance(ev.get("eligible_departments"), list) else "See rulebook"
+    )
+    row = sched.get(key, {})
+    when = str(ev.get("event_date") or "TBD")
+    if row.get("start") and row.get("end"):
+        when += f" ({row['start']}–{row['end']}{' mock' if row.get('source') == 'mock' else ''})"
+    fee = f"{ev['fee_bdt']} BDT/{ev.get('fee_per') or 'entry'}" if ev.get("fee_bdt") else "Fee unstated"
+    return f"• {ev['name']} — {team} · {depts} · {fee} · {when}"
+
+
+def _conversational_reply(text: str, student_id: str) -> str | None:
+    kind = _conversational_kind(text)
+    if kind is None:
+        return None
+    person = load_students().get(student_id)
+    first = person["name"].split()[0] if person else "there"
+    if kind == "greeting":
+        who = f"You're signed in as {person['name']} ({student_id}, {person['department']}). " if person else ""
+        return (
+            f"Hello {first}! Welcome to FestGuide for IIUC CSE Fest 2026.\n\n"
+            f"{who}I can help you with:\n"
+            "• Rulebooks & Citations — fees, deadlines, equipment rules, and version differences across 7 official rulebooks + 3 mocked faculty events\n"
+            "• Eligibility & Schedule Clashes — check whether you or your teammates can join and whether two events overlap\n"
+            "• Team Registration — submit a team or organizer exception request directly for approval\n\n"
+            'Try asking "Tell me about the events", "How much is the debate fee?", or "Do 3MT and Project Showcase clash?"'
+        )
+    if kind == "thanks":
+        return (
+            f"You're welcome, {first}! Let me know anytime if you want to check another event's rulebook, "
+            "compare schedules, or submit a team for IIUC CSE Fest 2026."
+        )
+    events, sched = load_events(), load_schedule()
+    official = [_format_event_line(k, ev, sched) for k, ev in events.items() if ev.get("source") != "mock"]
+    mocked = [_format_event_line(k, ev, sched) for k, ev in events.items() if ev.get("source") == "mock"]
+    parts = [
+        f"Here is the full IIUC CSE Fest 2026 lineup ({len(events)} events & indexed rulebooks):",
+        "\nOfficial CSE Fest 2026 Rulebooks:\n" + "\n".join(official),
+    ]
+    if mocked:
+        parts.append("\nMocked Non-Engineering Faculty Events (MOCK data):\n" + "\n".join(mocked))
+    parts.append(
+        "\nAsk about any specific event for section/page citations (and earlier v1-mock comparisons where applicable), "
+        "check clashes between two events, or ask to register a team!"
+    )
+    return "\n".join(parts)
+
+
 def out_of_scope(state: State) -> dict:
     if state["intent"].get("asks_about_other_person"):          # C5: a student sees only their own records
         return {"answer": "I can't share another student's personal details or registrations. "
                           "Each student can check their own status in their own chat."}
+    if reply := _conversational_reply(state.get("standalone") or state["masked"], state["student_id"]):
+        return {"answer": reply}
     return {"answer": "I can only help with the IIUC CSE Fest 2026 events: their rules, your eligibility, "
                       "schedule clashes and registration. For anything else, please contact the organizers."}
 
@@ -226,21 +340,26 @@ def compose_reply(state: State) -> dict:
     """Build the final text, and add this turn to the chat history. The checkpointer saves it (C4)."""
     decision, blocked = state.get("decision"), state.get("blocked")
     stored_question = state["masked"]                          # what the student typed, private numbers hidden
+    draft_members = state.get("draft_members") or []
     if blocked:
         text = blocked["message"]
         stored_question = f"[message blocked: {blocked['kind']}]"     # an attack must not sit in the history
+        draft_members = []
     elif state.get("request") is None and state["intent"].get("intent") == "register":      # could not even draft it
         text = state["answer"]
     elif decision and decision["status"] == "rejected":
         text = f"Your {state['request']['kind']} request was not approved by the organizer. Reason: {decision['note']}"
+        draft_members = []
     else:
         lines = [state.get("answer", "")]
         if state.get("version_note"):
             lines.append(f"(Version note: {state['version_note']})")
         lines += [f"  [cite] {Citation(**c).label()}" for c in state.get("citations") or []]
         text = "\n".join(lines)
+        draft_members = []
     text = "\n".join([*(f"({n})" for n in state.get("notes") or []), text])
-    return {"reply": text, "messages": turn_messages(state.get("messages", []), stored_question, text)}
+    return {"reply": text, "draft_members": draft_members,
+            "messages": turn_messages(state.get("messages", []), stored_question, text)}
 
 
 # ---- routes: functions that return the NAME of the next node --------------------------------
@@ -252,7 +371,13 @@ def after_intake(state: State) -> str:
 def after_classify(state: State) -> str:
     if state["intent"]["asks_about_other_person"]:               # never reaches a tool: nothing to leak
         return "out_of_scope"
-    return {"rules": "retrieve", "plan": "tool_agent", "register": "tool_agent"}.get(state["intent"]["intent"], "out_of_scope")
+    intent = state["intent"]["intent"]
+    events = state["intent"].get("events") or []
+    if intent == "register" and len(events) != 1:
+        return "draft_request"                                   # no single event: skip tool calls and ask which event
+    if not events and intent in ("other", "rules", "plan") and _conversational_kind(state.get("standalone") or state["masked"]):
+        return "out_of_scope"
+    return {"rules": "retrieve", "plan": "tool_agent", "register": "tool_agent"}.get(intent, "out_of_scope")
 
 
 def after_tools(state: State) -> str:
@@ -275,7 +400,7 @@ def build_graph(checkpointer=None):
     g.add_edge(START, "intake")
     g.add_conditional_edges("intake", after_intake, ["rewrite", "compose_reply"])
     g.add_edge("rewrite", "classify")
-    g.add_conditional_edges("classify", after_classify, ["retrieve", "tool_agent", "out_of_scope"])
+    g.add_conditional_edges("classify", after_classify, ["retrieve", "tool_agent", "draft_request", "out_of_scope"])
     g.add_edge("retrieve", "answer")
     g.add_conditional_edges("tool_agent", after_tools, ["draft_request", "explain_result"])
     g.add_conditional_edges("draft_request", after_draft, ["approval_gate", "compose_reply"])
@@ -284,6 +409,14 @@ def build_graph(checkpointer=None):
         g.add_edge(last, "compose_reply")
     g.add_edge("compose_reply", END)
     return g.compile(checkpointer=checkpointer)
+
+
+def paused_reply(req: dict) -> str:
+    probs = req.get("problems") or []
+    note = f" Eligibility/rule issue(s) flagged for the organizer: {'; '.join(probs)}." if probs else ""
+    return (f"I checked your request and sent it to a fest organizer for approval "
+            f"({req['kind']}: {req['event_name']}, team of {1 + len(req['member_ids'])}).{note} "
+            "Nothing is saved until they decide. You will see the result here.")
 
 
 def run(graph, question: str, student_id: str = "C233001", show=print, thread_id: str | None = None) -> dict:
@@ -295,11 +428,8 @@ def run(graph, question: str, student_id: str = "C233001", show=print, thread_id
     for update in graph.stream(state, config, stream_mode="updates"):
         for node, changes in update.items():
             if node == "__interrupt__":                   # the graph paused at the approval gate
-                req = state["request"]
                 state["interrupted"] = True
-                state["reply"] = (f"I checked your request and sent it to a fest organizer for approval "
-                                  f"({req['kind']}: {req['event_name']}, team of {1 + len(req['member_ids'])}). "
-                                  "Nothing is saved until they decide. You will see the result here.")
+                state["reply"] = paused_reply(state["request"])
                 show("  -> approval_gate  (paused: waiting for an organizer)")
                 continue
             changes = changes or {}          # a node that changed nothing reports None
@@ -329,9 +459,11 @@ SAMPLES = [   # (message, asking student)
 
 if __name__ == "__main__":
     graph = build_graph(InMemorySaver())             # interrupt() needs a checkpointer; samples need no file
-    print(graph.get_graph().draw_mermaid() if "--mermaid" in sys.argv else "")
-    cli = [(" ".join(sys.argv[1:]), "C233001")] if len(sys.argv) > 1 and not sys.argv[1].startswith("--") else SAMPLES
-    for q, student in cli:
-        print(f"\nQ ({student}): {q}")
-        print(run(graph, q, student, thread_id=f"sample-{student}-{abs(hash(q))}")["reply"])
+    if "--mermaid" in sys.argv:
+        print(graph.get_graph().draw_mermaid())
+    else:
+        cli = [(" ".join(sys.argv[1:]), "C233001")] if len(sys.argv) > 1 and not sys.argv[1].startswith("--") else SAMPLES
+        for q, student in cli:
+            print(f"\nQ ({student}): {q}")
+            print(run(graph, q, student, thread_id=f"sample-{student}-{abs(hash(q))}")["reply"])
     store.close()

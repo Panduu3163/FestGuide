@@ -45,7 +45,14 @@ def search(question: str, k: int | None = None, event: str | None = None, versio
     question = " ".join(VERSION_WORDS.sub(" ", question).split()) or question
     fields = {name: value for name, value in (("event", event), ("version", version)) if value}
     flt = store.where(**fields) if fields else None      # `version="2026"`: only the current rulebook text
-    hits = store.vector_store(mode or settings.RETRIEVAL_MODE).similarity_search(question, k=k * 3, filter=flt)
+    rm = mode or settings.RETRIEVAL_MODE
+    try:
+        hits = store.vector_store(rm).similarity_search(question, k=k * 3, filter=flt)
+    except Exception:
+        fb = store.fallback_vector_store(rm) if settings.embed_provider != "fastembed" else None
+        if fb is None:
+            raise
+        hits = fb.similarity_search(question, k=k * 3, filter=flt)
     groups: dict[tuple, list[Document]] = {}
     for d in hits:                                   # hits are best-first, so groups keep that order
         m = d.metadata

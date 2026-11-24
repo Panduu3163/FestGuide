@@ -36,6 +36,8 @@ def show(p: dict, n: int | None = None) -> None:
             print(f"      problem: {prob}")
         for note in c["unclear"]:
             print(f"      unclear: {note}")
+    for tp in req.get("team_problems") or []:
+        print(f"  - Team: {tp}")
     for r in req["cited_rules"]:
         print(f"Rule   : [{r['source']}]\n         {r['text'][:260]}")
     print(f"Student wrote: \"{req['student_message']}\"")

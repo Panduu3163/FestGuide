@@ -36,7 +36,7 @@ Each model call takes a few seconds on the free tier. Say what you are about to 
 | 7 | switch to the browser | LangSmith project `festguide`: open the last run to show the node tree with prompt versions; then the dataset `festguide-scorecard` and compare the Gemini and gpt-oss experiments | S4 tracing and evaluation, C2 |
 
 Optional extras if there is time: the follow-up `And what is the video length for it?` after asking about Videography
-(E2: the trace shows the rewrite), and `Tania is from BBA. Can an organizer make an exception so she can join Idea Generation?`
+(E2: the trace shows the rewrite), and `Shila (B243013) is from BBA. Can an organizer make an exception so she can join Idea Generation?`
 (an exception request, the BBA problem shown to the organizer).
 
 ## If something goes wrong

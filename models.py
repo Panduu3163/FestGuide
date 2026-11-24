@@ -30,7 +30,13 @@ def make_model(model_id: str):
     the classifier, the answerer, the tool loop and the explainer all spend the same free-tier quota
     (Gemini's is 15 requests a minute), so they must queue behind the same limiter."""
     provider = model_id.split(":", 1)[0]
-    limiter = _LIMITERS.setdefault(provider, InMemoryRateLimiter(requests_per_second=settings.REQUESTS_PER_SECOND))
+    if provider not in _LIMITERS:
+        # Allow a 4-call interactive burst immediately instead of sleeping ~4.6s on the first call,
+        # while still pacing sustained/batch runs at settings.REQUESTS_PER_SECOND.
+        limiter = InMemoryRateLimiter(requests_per_second=settings.REQUESTS_PER_SECOND, max_bucket_size=4)
+        limiter.available_tokens = 4.0
+        _LIMITERS[provider] = limiter
+    limiter = _LIMITERS[provider]
     timeout, retries = settings.REQUEST_TIMEOUT_S, settings.MAX_RETRIES
     if model_id.startswith("openrouter:"):
         timeout, retries = timeout * 1000, 1            # OpenRouter counts the timeout in milliseconds
@@ -55,8 +61,11 @@ def build_model(schema=None, tools=None):
     def prepared(model_id: str):
         m = make_model(model_id)
         if schema is not None:
+            # OpenRouter defaults to tool-calling for structured output, which can return empty content;
+            # json_schema returns parseable JSON cleanly across OpenRouter providers.
+            so_kwargs = {"method": "json_schema"} if model_id.startswith("openrouter:") else {}
             # a reply that does not fit the schema is retried (up to 3 tries) before it counts as a failure
-            m = (m.with_structured_output(schema) | RunnableLambda(_must_parse)).with_retry(
+            m = (m.with_structured_output(schema, **so_kwargs) | RunnableLambda(_must_parse)).with_retry(
                 retry_if_exception_type=(ValueError,), stop_after_attempt=3, wait_exponential_jitter=False)
         if tools is not None:
             m = m.bind_tools(tools)

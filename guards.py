@@ -59,7 +59,7 @@ MESSAGES = {
     "abuse": "Please keep the chat respectful. I'm happy to help with questions about the fest.",
     "privacy": "I can't share another student's personal details or registrations. "
                "Each student can check their own status in their own chat.",
-    "limit": "This conversation has reached its message limit. Please start a new one (/new) or contact the organizers.",
+    "limit": "This conversation has reached its message limit. Please start a new conversation or contact the organizers.",
 }
 
 
@@ -91,12 +91,15 @@ def asks_for_others_private_details(text: str, student_id: str) -> bool:
     """A private-detail word (phone, e-mail, address) together with another student's first name or ID."""
     if not PRIVATE_WORDS.search(text):
         return False
+    students = load_students()
+    me_first = students[student_id]["name"].split()[0].lower() if student_id in students else ""
     words = set(re.findall(r"[a-z]+", text.lower()))
-    ids = set(re.findall(r"[a-z]\d{6}", text.lower()))
-    for s in load_students().values():
+    tokens = set(re.findall(r"[a-z0-9]+", text.lower()))
+    for s in students.values():
         if s["id"] == student_id:
             continue
-        if s["id"].lower() in ids or s["name"].split()[0].lower() in words:
+        other_first = s["name"].split()[0].lower()
+        if s["id"].lower() in tokens or (other_first != me_first and other_first in words):
             return True
     return False
 

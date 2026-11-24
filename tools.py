@@ -36,9 +36,14 @@ def resolve_student(ref: str) -> tuple[dict | None, str | None]:
     students, ref = load_students(), ref.strip()
     if ref.upper() in students:
         return students[ref.upper()], None
-    hits = [s for s in students.values() if ref.lower() in s["name"].lower()]
+    low = ref.lower()
+    hits = [s for s in students.values() if low in s["name"].lower()]
     if len(hits) == 1:
         return hits[0], None
+    if len(hits) > 1:
+        exact = [s for s in hits if s["name"].lower() == low] or [s for s in hits if s["name"].split()[0].lower() == low]
+        if len(exact) == 1:
+            return exact[0], None
     if not hits:
         return None, f"no student matches '{ref}'"
     return None, f"'{ref}' matches {len(hits)} students ({', '.join(h['id'] for h in hits)}); give the ID"
@@ -179,7 +184,7 @@ def register_team(event: str, leader_id: str, member_ids: list[str], exception_r
     members = list(dict.fromkeys([leader_id, *member_ids]))
     if ev is None or any(m not in load_students() for m in members):
         raise ValueError("unknown event or student")
-    if ev["team_min"] and ev["team_max"] and not ev["team_min"] <= len(members) <= ev["team_max"]:
+    if not exception_reason and ev["team_min"] and ev["team_max"] and not ev["team_min"] <= len(members) <= ev["team_max"]:
         raise ValueError(f"team size {len(members)} is outside {ev['team_min']}-{ev['team_max']}")
     with db() as conn:
         existing = conn.execute("SELECT ref, status, organizer_note FROM teams WHERE event = ? AND leader_id = ? "
@@ -187,6 +192,13 @@ def register_team(event: str, leader_id: str, member_ids: list[str], exception_r
         if existing:
             return {"ref": existing["ref"], "status": existing["status"], "organizer_note": existing["organizer_note"],
                     "already_registered": True}
+        if not exception_reason:
+            marks = ",".join("?" * len(members))
+            conflict = conn.execute(f"""SELECT m.student_id, t.ref FROM teams t JOIN team_members m ON m.ref = t.ref
+                                        WHERE t.event = ? AND t.status = 'approved' AND m.student_id IN ({marks})""",
+                                    (event, *members)).fetchone()
+            if conflict:
+                raise ValueError(f"{conflict['student_id']} is already registered in {conflict['ref']} for {event}")
         last = conn.execute("SELECT MAX(CAST(SUBSTR(ref, 5) AS INTEGER)) FROM teams").fetchone()[0] or 0
         ref = f"REG-{last + 1:04d}"
         conn.execute("INSERT INTO teams VALUES (?,?,?,?,?,?)",

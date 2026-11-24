@@ -1,10 +1,17 @@
 # secrets: never commit
 .env
+.env.*
 
-# python / uv
+# python / uv / tests
 .venv/
 __pycache__/
 *.pyc
+.pytest_cache/
+
+# frontend build dependencies (built bundle lives in static/)
+frontend/node_modules/
+frontend/.vite/
+*.tsbuildinfo
 
 # runtime state (Qdrant index, checkpoints, chat history)
 .state/

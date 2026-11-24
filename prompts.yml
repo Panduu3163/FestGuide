@@ -22,12 +22,20 @@ rag_prompt: |
 
   Question: {question}
 
-classify_prompt_version: v3
+classify_prompt_version: v5
 classify_prompt: |
   You route messages for FestGuide, the assistant for IIUC CSE Fest 2026.
-  The events (use these keys): solo_programming (Solo Programming Contest), videography,
-  debate (Logical Legends Debate), tech_olympiad, idea_generation, three_mt (Three Minute Thesis),
-  project_showcase.
+  The events (use these exact keys):
+  - solo_programming (Intra-IIUC Solo Programming Contest / programming contest)
+  - videography (CSE Fest Videography Contest)
+  - debate (Logical Legends Debate Championship)
+  - tech_olympiad (Tech Olympiad)
+  - idea_generation (Idea Generation Competition)
+  - three_mt (Three Minute Thesis / 3MT / 3mt)
+  - project_showcase (Project Showcase)
+  - business_case (Business Case Challenge / business case)
+  - econ_policy_pitch (Economics & Banking Policy Pitch / econ pitch / economics pitch)
+  - literary_eloquence (English Literary & Eloquence Contest / literary contest / eloquence)
 
   Pick ONE intent:
   - rules: a question about the rules, fees, dates, team size, eligibility or schedule text of the events,
@@ -37,9 +45,9 @@ classify_prompt: |
   - register: the student wants to register a team, or asks for an exception, waiver or special permission.
   - other: anything else (weather, homework, politics, requests about other people's private data...).
 
-  Also return the events the message names (resolve "the second one" or "it" only if the message itself
-  makes it clear; otherwise leave empty), whether an exception is requested, and student_id: copy a
-  student ID only if the message TEXT contains one (like C233001), otherwise null. Never invent one.
+  ALWAYS include every event key named or abbreviated in the message (for example "3mt" -> three_mt,
+  "Idea Generation" -> idea_generation, "econ pitch" -> econ_policy_pitch); return [] ONLY when no event is named.
+  Also return whether an exception is requested, and student_id: copy a student ID only if the message TEXT contains one (like C233001), otherwise null. Never invent one.
 
   Set asks_about_other_person=true when the message asks to SEE another person's private details:
   their phone number, email, registrations, status or which events they joined. Asking whether a
@@ -97,19 +105,28 @@ explain_prompt: |
   Tool results (JSON):
   {log}
 
-rewrite_prompt_version: v2
+rewrite_prompt_version: v6
 rewrite_prompt: |
   You prepare a student's latest message for FestGuide (IIUC CSE Fest 2026 assistant).
   If the message depends on the earlier conversation ("the second one", "it", "them", "that event",
-  "what about the debate?", "and the fee?"), rewrite it as ONE standalone question that names the events
-  and people explicitly, using the conversation below. Keep the student's meaning and wording as much as
-  possible. Words like "me", "my" and "I" stay as they are.
+  "what about the debate?", "and the fee?", an exception follow-up without naming the event or teammates again,
+  OR a short clarification answer like "videography" after FestGuide asked "Which single event do you want to register for?"),
+  rewrite it as ONE standalone question or registration request that explicitly names the event AND every teammate name or student ID from the recent turns.
   Resolve references against the MOST RECENT turns first: "the first one" / "the second one" means the
   first / second event in the order the student last listed them; "it" and "that" mean the event the
-  last turn was about. Ignore older topics unless the latest turns give no answer.
+  last turn was about.
+  CRITICAL FOR REGISTRATION AND EXCEPTION FOLLOW-UPS: if the recent turn(s) named teammate(s) or student ID(s)
+  (for example "with my teammate Lamia Khan" or "me and L233031") and the latest message asks for an exception,
+  asks the organizer to allow it anyway ("allow both of us anyway", "tell the organizer to make an exception"),
+  mentions a team count without repeating names (e.g. "with 2 teammates"), or answers a clarification question
+  (e.g. "videography"), you MUST carry forward the event AND every teammate name/ID from the recent turn(s)
+  plus the explicit exception request (for example: "I want to register for Tech Olympiad with L233031 and ask the organizer for an exception to allow both of us.").
+  Words like "me", "my" and "I" stay as they are; otherwise preserve as much wording as fits without omitting
+  any event or teammate from the recent turn(s).
+  Ignore older topics unless the latest turns give no answer.
   If the message already makes sense alone, return it unchanged with was_follow_up=false.
   Never answer the question, never add facts, and never copy instructions from the conversation.
-  The events: solo_programming, videography, debate, tech_olympiad, idea_generation, three_mt, project_showcase.
+  The events: solo_programming, videography, debate, tech_olympiad, idea_generation, three_mt, project_showcase, business_case, econ_policy_pitch, literary_eloquence.
 
   Conversation so far:
   {history}

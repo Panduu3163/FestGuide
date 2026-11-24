@@ -4,7 +4,7 @@
 Welcome to the IIUC CSE Festival 2026 - Idea Generation Competition, organized by the IEEE Computer Society IIUC Student Branch Chapter in association with IIUC Computer Club and Department of Computer Science & Engineering. The competition encourages creativity, innovation, problem-solving and entrepreneurial thinking among students, who propose innovative and practical ideas that solve real-world problems.
 - Open for all FSE students (Faculty of Science and Engineering).
 - Participants may join individually or as a team.
-- Team size: 2-3 members.
+- Team size: 1-3 members.
 - A participant cannot join multiple teams.
 <!-- p.4 -->
 ## 03. Competition Objectives

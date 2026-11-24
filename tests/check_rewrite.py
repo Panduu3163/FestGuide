@@ -36,6 +36,10 @@ check("short message with history is rewritten", needs_rewrite("And the fee?", h
 check("reference word triggers a rewrite", needs_rewrite("How big can a team be for the second one in that list of events?", hist))
 check("a long standalone question is left alone",
       not needs_rewrite("What is the registration fee for the Logical Legends Debate for a team of three students?", hist))
+check("exception follow-up without an event name triggers rewrite",
+      needs_rewrite("i want to register with 2 teammates. tell the organizer to make an exception", hist))
+check("natural organizer override follow-up triggers rewrite",
+      needs_rewrite("Tell the organizer to allow both of us anyway", hist))
 
 # ---- live: a conversation with follow-ups ----
 graph, n = build_graph(InMemorySaver()), iter(range(100))
@@ -78,6 +82,27 @@ s = say("Register us for that. Me and Rafi.")
 check("a registration follow-up names the event and pauses for an organizer",
       s.get("interrupted") and s["request"]["event"] == "idea_generation", (s["standalone"], s["intent"], s["reply"]))
 check("the organizer sees what the student typed, not the rewrite", (s["request"] or {}).get("student_message") == "Register us for that. Me and Rafi.", s["request"])
+
+# ---- exception follow-up carries forward both event and teammate ----
+t_exc = f"rw-{next(n)}"
+s = say("i want to register in the videography contest with my teammate lamia khan", t=t_exc)
+check("solo event with teammate triggers team-size warning",
+      not s.get("interrupted") and "team of 1" in s["reply"], s["reply"])
+s = say("i want to register with 2 teammates. tell the organizer to make an exception", t=t_exc)
+check("exception follow-up carries forward event and teammate for approval",
+      bool(s.get("interrupted")) and (s.get("request") or {}).get("event") == "videography"
+      and (s.get("request") or {}).get("kind") == "exception"
+      and "C223019" in (s.get("request") or {}).get("member_ids", []),
+      (s.get("standalone"), s.get("intent"), s.get("request"), s.get("reply")))
+
+t_allow = f"rw-{next(n)}"
+s = say("Register me and L233031 for Tech Olympiad", student="B243013", t=t_allow)
+s = say("Tell the organizer to allow both of us anyway", student="B243013", t=t_allow)
+check("natural 'allow both of us anyway' carries forward Tech Olympiad and L233031",
+      bool(s.get("interrupted")) and (s.get("request") or {}).get("event") == "tech_olympiad"
+      and (s.get("request") or {}).get("kind") == "exception"
+      and "L233031" in (s.get("request") or {}).get("member_ids", []),
+      (s.get("standalone"), s.get("intent"), s.get("request"), s.get("reply")))
 
 # ---- a second chat has its own history: nothing leaks across threads ----
 s = say("How big can a team be for the second one?", "C233002", t=f"rw-{next(n)}")

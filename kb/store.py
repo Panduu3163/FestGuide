@@ -17,6 +17,8 @@ from qdrant_client import QdrantClient, models
 from config import settings
 
 DENSE, SPARSE = "dense", "bm25"
+LOCAL_EMBED_MODEL = "BAAI/bge-small-en-v1.5"
+LOCAL_COLLECTION = f"rulebooks__{LOCAL_EMBED_MODEL.replace('/', '-')}-384"
 logging.getLogger("pypdf").setLevel(logging.ERROR)
 
 
@@ -118,15 +120,29 @@ def ensure_collection() -> None:
 
 
 _stores: dict = {}
+_fallback_stores: dict = {}
 
 
 def vector_store(mode: str = "dense") -> QdrantVectorStore:
-    """LangChain's view of the collection. mode: "dense", "keyword" or "hybrid" (writing uses hybrid).
-    Built once per mode: creating it embeds a dummy text to check the vector size, which costs one
-    embedding request every time (the free tier allows only 1000 a day)."""
+    """LangChain's view of the collection. mode: "dense", "keyword" or "hybrid" (writing uses hybrid)."""
     if mode not in _stores or _stores[mode].client is not _client:
         _stores[mode] = _make_store(mode)
     return _stores[mode]
+
+
+def fallback_vector_store(mode: str = "dense") -> QdrantVectorStore | None:
+    """Local fastembed fallback collection if Gemini embeddings fail and the local index exists."""
+    if not client().collection_exists(LOCAL_COLLECTION):
+        return None
+    if mode not in _fallback_stores or _fallback_stores[mode].client is not _client:
+        rm = {"dense": RetrievalMode.DENSE, "keyword": RetrievalMode.SPARSE, "hybrid": RetrievalMode.HYBRID}[mode]
+        _fallback_stores[mode] = QdrantVectorStore(
+            client=client(), collection_name=LOCAL_COLLECTION,
+            embedding=None if mode == "keyword" else FastEmbedEmbeddings(LOCAL_EMBED_MODEL),
+            sparse_embedding=None if mode == "dense" else bm25(),
+            retrieval_mode=rm, vector_name=DENSE, sparse_vector_name=SPARSE,
+            validate_embeddings=False)
+    return _fallback_stores[mode]
 
 
 def _make_store(mode: str) -> QdrantVectorStore:
@@ -135,7 +151,8 @@ def _make_store(mode: str) -> QdrantVectorStore:
         client=client(), collection_name=settings.collection,
         embedding=None if mode == "keyword" else embeddings(),
         sparse_embedding=None if mode == "dense" else bm25(),
-        retrieval_mode=rm, vector_name=DENSE, sparse_vector_name=SPARSE)
+        retrieval_mode=rm, vector_name=DENSE, sparse_vector_name=SPARSE,
+        validate_embeddings=False)
 
 
 def where(**fields: str) -> models.Filter:

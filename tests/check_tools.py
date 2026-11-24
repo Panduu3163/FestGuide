@@ -81,11 +81,36 @@ again = tools.register_team("idea_generation", ARIF, [RAFI, TANIA], None, approv
 check("running it twice does not add a second team", again["ref"] == "REG-0004" and again["already_registered"], again)
 check("the new team shows in each member's status", [r["ref"] for r in tools.get_registration_status_impl(TANIA)] == ["REG-0004"])
 for label, args in [("team too big", ("idea_generation", RAFI, ["C233001", "E233003", "T233004"], None)),
+                    ("teammate already in another approved team", ("idea_generation", "C233007", [RAFI], None)),
                     ("unknown student", ("debate", RAFI, ["X999999", "C233001"], None))]:
     try:
         tools.register_team(*args, approval)
         check(f"register_team rejects {label}", False)
     except ValueError:
         check(f"register_team rejects {label}", True)
+exc_team = tools.register_team("debate", "C243009", [], "solo exception approved", approval)
+check("register_team allows out-of-range size when approved with exception_reason", exc_team["ref"] == "REG-0005", exc_team)
 
+# --- draft.build_request + paused_reply for ineligible BBA student ---
+from draft import build_request  # noqa: E402
+from graph import paused_reply  # noqa: E402
+req_bba_solo, msg_bba_solo = build_request("B243013", "Register me for Project Showcase", ["project_showcase"], False, [])
+check("BBA solo for Project Showcase reports both team size and BBA ineligibility",
+      req_bba_solo is None and "3 to 5" in msg_bba_solo and "BBA" in msg_bba_solo, msg_bba_solo)
+req_bba_3mt, msg_bba_3mt = build_request("B243013", "Register me for 3MT", ["three_mt"], False, [])
+check("BBA solo for 3MT drafts an exception request with paused_reply surfacing BBA issue",
+      req_bba_3mt is not None and req_bba_3mt["kind"] == "exception" and "BBA" in paused_reply(req_bba_3mt),
+      (req_bba_3mt, msg_bba_3mt))
+
+# --- non-engineering mocked events eligibility & clashes ---
+check("CSE student cannot join Business Case Challenge (BBA only)", elig(ARIF, "business_case")["eligible"] is False)
+check("BBA student can join Business Case Challenge", elig("B243013", "business_case")["eligible"] is True)
+check("CSE student cannot join English Literary & Eloquence (ELL only)", elig(ARIF, "literary_eloquence")["eligible"] is False)
+check("ELL student can join English Literary & Eloquence", elig("L233031", "literary_eloquence")["eligible"] is True)
+check("EB student can join Economics & Banking Policy Pitch", elig("N233033", "econ_policy_pitch")["eligible"] is True)
+c_econ = tools.check_schedule_clash_impl(["econ_policy_pitch", "videography"])
+check("Economics Pitch and Videography overlap on 16 June (MOCK)", len(c_econ["clashes"]) == 1, c_econ)
+
+from kb import store  # noqa: E402
+store.close()
 print(f"\n{len(failures)} failed")

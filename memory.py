@@ -29,7 +29,9 @@ def checkpointer(path=None) -> SqliteSaver:
     # WAL lets one write while the other reads; the timeout makes a busy writer wait instead of failing.
     conn = sqlite3.connect(path or settings.STATE_DIR / "checkpoints.sqlite", check_same_thread=False, timeout=30)
     conn.execute("PRAGMA journal_mode=WAL")
-    return SqliteSaver(conn)
+    saver = SqliteSaver(conn)
+    saver.setup()
+    return saver
 
 
 def thread_id_for(student_id: str, name: str | None = None) -> str:

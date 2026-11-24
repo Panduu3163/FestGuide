@@ -10,9 +10,10 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
 
-# The seven events, by the same keys as data/events.yml.
+# The ten events (7 official rulebooks + 3 non-engineering mock events), matching data/events.yml.
 EventKey = Literal["solo_programming", "videography", "debate", "tech_olympiad",
-                   "idea_generation", "three_mt", "project_showcase"]
+                   "idea_generation", "three_mt", "project_showcase",
+                   "business_case", "econ_policy_pitch", "literary_eloquence"]
 
 
 class RagAnswer(BaseModel):
